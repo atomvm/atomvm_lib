@@ -1,0 +1,9 @@
+menu "AtomVMLib configuration"
+
+config RTC_MEMORY_SIZE
+	int  "RTC Memory Size (in bytes)"
+	default 0
+	help
+		Use this parameter to set the size of the RTC memory buffer.
+
+endmenu
