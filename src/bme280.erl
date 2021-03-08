@@ -52,7 +52,7 @@
 
 -behaviour(gen_server).
 
--export([start/2, start/3, take_reading/1, chip_id/1, version/1, soft_reset/1]).
+-export([start/2, start/3, stop/1, take_reading/1, chip_id/1, version/1, soft_reset/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -type pin() :: non_neg_integer().
@@ -132,6 +132,18 @@ start(SDAPin, SCLPin) ->
 -spec start(SDAPin::pin(), SCLPin::pin(), Options::options()) -> {ok, BME::bme()} | {error, Reason::term()}.
 start(SDAPin, SCLPin, Options) ->
     gen_server:start(?MODULE, [SDAPin, SCLPin, Options], []).
+
+%%-----------------------------------------------------------------------------
+%% @param       BME a reference to the BME instance created via start
+%% @returns     ok if successful; {error, Reason}, otherwise
+%% @doc Stop the BME280 driver.
+%%
+%% Note. This function is not well tested and its use may result in a memory leak.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec stop(BME::bme()) -> ok | {error, Reason::term()}.
+stop(BME) ->
+    gen_server:stop(BME).
 
 %%-----------------------------------------------------------------------------
 %% @param       BME a reference to the BME instance created via start

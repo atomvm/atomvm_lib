@@ -17,4 +17,5 @@ _build
 *.iml
 .vscode/**
 rebar3.crashdump
+rebar.lock
 *~

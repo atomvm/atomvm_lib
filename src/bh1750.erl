@@ -393,7 +393,7 @@ get_sleep_ms(low) -> 16.
 %% @private
 round_sleep({I, {_N, _D} = F}) ->
     I + round_sleep(F);
-round_sleep({0, D}) ->
+round_sleep({0, _D}) ->
     0;
 round_sleep({N, D}) ->
     case N > (D bsr 1) of

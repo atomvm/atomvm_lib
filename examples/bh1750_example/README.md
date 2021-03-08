@@ -41,7 +41,7 @@ To build and flash this application to your ESP32 device, issue the `esp32_flash
 
 > Note.  For information about the `esp32_flash` target, see the [`atomvm_rebar3_plugin`](https://github.com/fadushin/atomvm_rebar3_plugin) instructions.
 
-    shell$ ebar3 esp32_flash -p /dev/tty.usbserial-01940306
+    shell$ rebar3 esp32_flash -p /dev/tty.usbserial-01940306
     ===> Verifying dependencies...
     ===> App atomvm_lib is a checkout dependency and cannot be locked.
     ===> Analyzing applications...
@@ -73,4 +73,13 @@ Connect to the device using the USB port (e.g., via `minicom`), and you should s
     Starting: bh1750_example.beam...
     ---
     Luminosity: 153.22lx
+    Luminosity: 106.66lx
+    Luminosity: 107.50lx
+    Luminosity: 107.50lx
+    Luminosity: 107.50lx
+    Luminosity: 106.66lx
+    Luminosity: 107.50lx
+    Luminosity: 107.50lx
+    Luminosity: 90.0lx
+    Luminosity: 74.16lx
     ...

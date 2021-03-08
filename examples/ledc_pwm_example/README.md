@@ -1,13 +1,13 @@
 # `bme280_example`
 
-Welcome to the `bme280_example` AtomVM application.
+Welcome to the `ledc_pwm_example` AtomVM application.
 
-This example application will drive a BME280 temperature, pressure, and humidity sensor attached to an ESP32 device using the 2-wire I2C interface and print readings to the console.
+This example application illustrates use of the high-level LEDC PWM interface.
 
 For this application, you will need:
 
 * An ESP32 device, flashed with the [AtomVM](https://github.com/bettio/AtomVM) image (including the VM and core libraries), and capable of connecting via UART to your development machine;
-* A BME280 device, typically marketed as an integrated development board;
+* An LED to connect to your ESP32 device (if not already available on your development board);
 * The [`esptool.py`](https://github.com/espressif/esptool) tool (for flashing);
 * The [`git`](https://git-scm.com) version control tool;
 * [Erlang/OTP 21](https://www.erlang.org) or higher, along with [`rebar3`](https://www.rebar3.org);
@@ -19,21 +19,19 @@ While the [IDF SDK](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/
 
 ### Connection
 
-Use of the BME280 will typically require connecting some kind of development board, which includes the BH1750 integrated circuit, along with additional passive components, to you ESP32 device.
+Many development boards already have an LED attached to GPIO2.
 
-Connect the VCC and GND pins to a power source and ground (e.g., on your ESP32).
+However, if you are using a base ESP32, build a circuit containing an LED and 1k resistor.
 
-Connect the SDA and SCL pins on two selected GPIO pins on your ESP32 device (e.g., pin 21 and 22).
+    +-------------+        +-----------+
+    |             |        |           |
+    |        GND  +--------+           /\  LED
+    |     GPIO 2  +--------+          ----
+    |             |        |            |
+    +-------------+        +---\/\/\/---+
+         ESP32               1k resistor
 
-    +-----------+                         +-------------+
-    |       VCC +-------------------------+ +3.3v       |
-    |       GND +-------------------------+ GND         |
-    |       SDA +-------------------------+ GPIO 21     |
-    |       SCL +-------------------------+ GPIO 22     |
-    +-----------+                         +-------------+
-       BME280                                  ESP32
-
-> Note.  The example program assumes the SDA pin is connected to the ESP32 GPIO pin 21 and the SCL pin is connected to the ESP32 GPIO pin 22.  If you need to use different pins, make sure to change the example program to reflect your requirements.
+> Note.  The example program assumes the LED is attached to GPIO2.  If you need to use different pins, make sure to change the example program to reflect your requirements.
 
 ### Build Instructions
 
