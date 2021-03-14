@@ -16,7 +16,7 @@
 %%
 -module(rational).
 
--export([add/2, subtract/2, multiply/2, divide/2, normalize/1, simplify/1, reduce/1, to_decimal/2]).
+-export([add/2, subtract/2, multiply/2, divide/2, normalize/1, simplify/1, reduce/1, to_decimal/2, round/1]).
 
 -type numerator() :: integer().
 -type denominator() :: integer().
@@ -162,6 +162,21 @@ long_division(D, N1, Precision, Accum) ->
     N2 = N1 * 10,
     X = N2 div D,
     long_division(D, N2 - X * D, Precision - 1, [X | Accum]).
+
+%%
+%% @param R rational
+%% @return Rounded off integer
+%%
+-spec round(R::rational()) -> integer().
+round({I, {N, D} = F}) when is_integer(I) andalso is_integer(N) andalso is_integer(D) ->
+    I + ?MODULE:round(F);
+round({N, D}) when is_integer(N) andalso is_integer(D) ->
+    case N < (D bsr 1) of
+        true -> 0;
+        _ -> 1
+    end;
+round(I) when is_integer(I) ->
+    I.
 
 %% @private
 to_number(Digits) ->
