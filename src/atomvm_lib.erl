@@ -16,7 +16,7 @@
 %%
 -module(atomvm_lib).
 
--export([set_rtc_memory/1, get_rtc_memory/0]).
+-export([set_rtc_memory/1, get_rtc_memory/0, random/2, sleep_forever/0]).
 
 %%-----------------------------------------------------------------------------
 %% @param   Data binary data to store
@@ -52,3 +52,27 @@ set_rtc_memory(_Data) ->
 -spec get_rtc_memory() -> binary().
 get_rtc_memory() ->
     throw(nif_error).
+
+%%-----------------------------------------------------------------------------
+%% @returns random 32-bit integer between `Lower' and `Upper'.
+%% @doc     Returns a random 32-bit integer value between `Lower' and `Upper'.
+%%
+%%          Bother `Lower' and `Upper' must be integers and `Lower' must be less than `Upper'.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec random(Lower::integer(), Upper::integer()) -> integer().
+random(Lower, Upper) when is_integer(Lower), is_integer(Upper), Lower < Upper ->
+    R = atomvm:random(),
+    P = case R < 0 of true -> -R; _ -> R end,
+    Lower + (P rem (Upper - Lower));
+random(_,_) ->
+    throw(badarg).
+
+
+%%-----------------------------------------------------------------------------
+%% @doc     Sleep forever.   This function does not halt.
+%% @end
+%%-----------------------------------------------------------------------------
+sleep_forever() ->
+    timer:sleep(24*60*60*1000),
+    sleep_forever().
