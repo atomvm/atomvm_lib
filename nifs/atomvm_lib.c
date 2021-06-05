@@ -78,8 +78,8 @@ static term nif_get_mac(Context *ctx, int argc, term argv[])
     if (UNLIKELY(memory_ensure_free(ctx, term_binary_data_size_in_terms(2 * MAC_LENGTH) + BINARY_HEADER_SIZE) != MEMORY_GC_OK)) {
         RAISE_ERROR(OUT_OF_MEMORY_ATOM);
     }
-    char buf[2 * MAC_LENGTH];
-    sprintf(buf,
+    char buf[2 * MAC_LENGTH + 1];
+    snprintf(buf, 2 * MAC_LENGTH + 1,
         "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     return term_from_literal_binary(buf, 2 * MAC_LENGTH, ctx);
