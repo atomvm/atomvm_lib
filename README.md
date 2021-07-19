@@ -24,6 +24,7 @@ You can then use the `packbeam` and `esp32_flash` targets to upload your applica
 
 The `atomvm_lib` library contains the following features:
 
-* [BME280](doc/bme280.md)
-* [BH1750](doc/bh1750.md)
-* [LEDC PWM](doc/ledc_pwm.md)
+* [BME280](markdown/bme280.md)
+* [BH1750](markdown/bh1750.md)
+* [LEDC PWM](markdown/ledc_pwm.md)
+* [LoRa](markdown/lora.md)
