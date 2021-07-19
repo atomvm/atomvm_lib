@@ -1,0 +1,3 @@
+COMPONENT_ADD_INCLUDEDIRS := nifs/include
+COMPONENT_SRCDIRS := nifs
+CXXFLAGS += -fno-rtti
