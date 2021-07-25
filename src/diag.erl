@@ -16,17 +16,19 @@
 %%
 -module(diag).
 
--export([print_proc_infos/0, print_proc_info/1]).
+-export([print_all_proc_info/0, print_proc_info/0, print_proc_info/1]).
 
 
-print_proc_infos() ->
+print_all_proc_info() ->
     Procs = erlang:processes(),
     io:format("num_procs: ~p~n", [length(Procs)]),
     [print_proc_info(Proc) || Proc <- Procs],
     io:format("esp32_free_heap_size: ~p~n", [erlang:system_info(esp32_free_heap_size)]),
-    % io:format("refc_binary_info: ~p~n", [erlang:system_info(refc_binary_info)]),
+    io:format("refc_binary_info: ~p~n", [erlang:system_info(refc_binary_info)]),
     ok.
 
+print_proc_info() ->
+    print_proc_info(self()).
 
 print_proc_info(Proc) ->
     io:format("pid: ~p~n", [Proc]),

@@ -34,12 +34,13 @@ start() ->
     ],
     SPI = spi:open(SPIConfig),
     LoraConfig = #{
+        spi => SPI,
         frequency => freq_915mhz,
         bandwidth => bw_125khz,
         dio_0 => 26,
         receive_handler => fun handle_receive/3
     },
-    {ok, _Lora} = lora:start(SPI, LoraConfig),
+    {ok, _Lora} = lora:start(LoraConfig),
     io:format("Lora started.  Waiting to receive messages...~n"),
     loop_forever().
 

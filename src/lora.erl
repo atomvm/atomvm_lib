@@ -31,7 +31,7 @@
 %%%
 %%% @end
 
--export([start/2, stop/1, broadcast/2]).
+-export([start/1, stop/1, broadcast/2]).
 %% debugging
 -export([dump_registers/1]).
 
@@ -102,24 +102,29 @@
     frequency => freq_915mhz,
     bandwidth => bw_125khz,
     tx_power => 2,
-    spreading_factor => 8,
+    spreading_factor => 7,
     preamble_length => 8,
-    error_coding_rate => ecr_4_5,
+    lna_gain => auto,
+    coding_rate => cr_4_5,
     header_mode => explicit,
     sync_word => 16#12,
-    enable_crc => false,
-    invert_iq => false
+    enable_crc => true,
+    invert_iq => false,
+    binary => true
 }).
 
 -type lora() :: pid().
 -type message() :: string(). %% TODO
 
--type frequency() :: freq_915mhz | freq_868mhz.
--type bandwidth() :: bw_125khz.
+-type frequency() :: freq_169mhz | freq_433mhz | freq_868mhz | freq_915mhz | non_neg_integer().
+-type bandwidth() :: bw_7_8khz | bw_10_4khz | bw_15_6khz | bw_20_8khz | bw_31_25khz | bw_41_7khz | bw_62_5khz
+                        | bw_125khz | bw_250khz | bw_500khz.
 -type tx_power() :: 2..17.
 -type spreading_factor() :: 6..12.
 -type preamble_length() :: 6..65535.
--type error_coding_rate() :: ecr_4_5 | ecr_4_6 | ecr_4_7 | ecr_4_8.
+-type lna_gain() :: lna_0 | lna_1 | lna_2 | lna_3 | lna_4 | lna_5 | lna_6 | auto.
+
+-type coding_rate() :: cr_4_5 | cr_4_6 | cr_4_7 | cr_4_8.
 -type header_mode() :: implicit | explicit.
 
 -type config() :: #{
@@ -128,21 +133,23 @@
     tx_power => tx_power(),
     spreading_factor => spreading_factor(),
     preamble_length => preamble_length(),
-    error_coding_rate => error_coding_rate(),
+    lna_gain => lna_gain(),
+    coding_rate => coding_rate(),
     header_mode => header_mode(),
     sync_word => non_neg_integer(),
     enable_crc => boolean(),
-    invert_iq => boolean()
+    invert_iq => boolean(),
+    binary => boolean()
 }.
 
 %%%
 %%% Public API
 %%%
 
--spec start(pid(), config()) -> {ok, lora()} | {error, Reason::term()}.
-start(SPI, Config) ->
+-spec start(config()) -> {ok, lora()} | {error, Reason::term()}.
+start(Config) ->
     NewConfig = verify_config(maps:merge(?DEFAULT_CONFIG, Config)),
-    gen_server:start(?MODULE, {SPI, NewConfig}, []).
+    gen_server:start(?MODULE, NewConfig, []).
 
 -spec stop(Lora::lora()) -> ok.
 stop(Lora) ->
@@ -167,7 +174,8 @@ dump_registers(Lora) ->
 }).
 
 %% @hidden
-init({SPI, Config}) ->
+init(Config) ->
+    SPI = get_or_load_spi(maps:get(spi, Config)),
     case verify_version(SPI) of
         ok ->
             case init_lora(SPI, Config) of
@@ -186,6 +194,12 @@ init({SPI, Config}) ->
         VersionError ->
             VersionError
     end.
+
+%% @private
+get_or_load_spi(SPI) when is_pid(SPI) ->
+    SPI;
+get_or_load_spi(SPIConfig) when is_map(SPIConfig) ->
+    spi:open(SPIConfig).
 
 %% @hidden
 handle_cast(Message, State) ->
@@ -208,7 +222,7 @@ handle_info({gpio_interrupt, Pin}, #state{dio_0 = Pin} = State) ->
     do_receive(State),
     {noreply, State};
 handle_info(Message, State) ->
-    io:format("Unhandled info.  Message: ~p~n", [Message]),
+    io:format("lora Unhandled info.  Message: ~p~n", [Message]),
     {noreply, State}.
 
 %% @hidden
@@ -247,7 +261,7 @@ init_lora(SPI, Config) ->
     ok = set_tx_power(SPI, maps:get(tx_power, Config)),
     ok = set_header_mode(SPI, maps:get(header_mode, Config)),
     ok = set_spreading_factor(SPI, maps:get(spreading_factor, Config)),
-    ok = set_error_coding_rate(SPI, maps:get(error_coding_rate, Config)),
+    ok = set_coding_rate(SPI, maps:get(coding_rate, Config)),
     ok = set_preamble_length(SPI, maps:get(preamble_length, Config)),
     ok = set_sync_word(SPI, maps:get(sync_word, Config)),
     ok = set_enable_crc(SPI, maps:get(enable_crc, Config)),
@@ -279,32 +293,55 @@ get_mode(SPI) ->
     Mode.
 
 %% @private
-set_frequency(SPI, freq_915mhz) ->
-    set_frequency(SPI, 14991360);
+set_frequency(SPI, freq_169mhz) ->
+    set_frequency_internal(SPI, 2768896);
+set_frequency(SPI, freq_433mhz) ->
+    set_frequency_internal(SPI, 7094272);
 set_frequency(SPI, freq_868mhz) ->
-    set_frequency(SPI, 14221312);
-set_frequency(SPI, F) ->
-    ?TRACE("set_frequency ~p~n", [F]),
+    set_frequency_internal(SPI, 14221312);
+set_frequency(SPI, freq_915mhz) ->
+    set_frequency_internal(SPI, 14991360);
+set_frequency(SPI, Freq) when is_integer(Freq) ->
+    %% caution: requires AtomVM fix for parsing external terms > 0x0FFFFFFF
+    {F, _} = rational:simplify(
+        rational:reduce(
+            rational:multiply(
+                Freq,
+                {256,15625} %% 32Mhz/2^19 or rational:reduce(rational:divide(1 bsl 19, 32000000))
+            )
+        )
+    ),
+    set_frequency_internal(SPI, F).
 
-        % io:format("Freq: ~p~n", [Freq]),
-        % {F, _} = rational:simplify(
-        %     rational:reduce(
-        %         rational:multiply(
-        %             Freq,
-        %             rational:reduce(rational:divide(1 bsl 19, 32000000))
-        %         )
-        %     )
-        % ),
-        % io:format("F: ~p~n", [F]),
-
+%% @private
+set_frequency_internal(SPI, F) when is_integer(F) ->
+    ?TRACE("set_frequency_internal ~p~n", [F]),
     {ok, _} = write_register(SPI, ?REG_FRF_MSB, ((F bsr 16) band 16#FF)),
     {ok, _} = write_register(SPI, ?REG_FRF_MID, ((F bsr 8) band 16#FF)),
     {ok, _} = write_register(SPI, ?REG_FRF_LSB, F band 16#FF),
     ok.
 
 %% @private
+set_signal_bandwidth(SPI, bw_7_8khz) ->
+    set_signal_bandwidth(SPI, 0);
+set_signal_bandwidth(SPI, bw_10_4khz) ->
+    set_signal_bandwidth(SPI, 1);
+set_signal_bandwidth(SPI, bw_15_6khz) ->
+    set_signal_bandwidth(SPI, 2);
+set_signal_bandwidth(SPI, bw_20_8khz) ->
+    set_signal_bandwidth(SPI, 3);
+set_signal_bandwidth(SPI, bw_31_25khz) ->
+    set_signal_bandwidth(SPI, 4);
+set_signal_bandwidth(SPI, bw_41_7khz) ->
+    set_signal_bandwidth(SPI, 5);
+set_signal_bandwidth(SPI, bw_62_5khz) ->
+    set_signal_bandwidth(SPI, 6);
 set_signal_bandwidth(SPI, bw_125khz) ->
     set_signal_bandwidth(SPI, 7);
+set_signal_bandwidth(SPI, bw_250khz) ->
+    set_signal_bandwidth(SPI, 8);
+set_signal_bandwidth(SPI, bw_500khz) ->
+    set_signal_bandwidth(SPI, 9);
 set_signal_bandwidth(SPI, I) ->
     ?TRACE("set_signal_bandwidth ~p~n", [I]),
     {ok, ModemConfig1} = read_register(SPI, ?REG_MODEM_CONFIG_1),
@@ -355,15 +392,15 @@ set_spreading_factor(SPI, SF) ->
     ok.
 
 %% @private
-set_error_coding_rate(SPI, ecr_4_5) ->
-    set_error_coding_rate(SPI, 5);
-set_error_coding_rate(SPI, ecr_4_6) ->
-    set_error_coding_rate(SPI, 6);
-set_error_coding_rate(SPI, ecr_4_7) ->
-    set_error_coding_rate(SPI, 7);
-set_error_coding_rate(SPI, ecr_4_8) ->
-    set_error_coding_rate(SPI, 8);
-set_error_coding_rate(SPI, Denominator) ->
+set_coding_rate(SPI, cr_4_5) ->
+    set_coding_rate(SPI, 5);
+set_coding_rate(SPI, cr_4_6) ->
+    set_coding_rate(SPI, 6);
+set_coding_rate(SPI, cr_4_7) ->
+    set_coding_rate(SPI, 7);
+set_coding_rate(SPI, cr_4_8) ->
+    set_coding_rate(SPI, 8);
+set_coding_rate(SPI, Denominator) ->
     ?TRACE("set_coding_rate ~p~n", [Denominator]),
     Cr = Denominator - 4,
     {ok, ModemConfig1} = read_register(SPI, ?REG_MODEM_CONFIG_1),
@@ -552,24 +589,38 @@ do_receive(State) ->
 
             {ok, _} = write_register(SPI, ?REG_FIFO_ADDR_PTR, CurrentAddr),
             Data = read_packet_data(SPI, PacketLength),
+            Frequency = maps:get(frequency, State#state.config),
+            QoS = #{
+                rssi => get_rssi(SPI, Frequency),
+                snr => get_snr(SPI)
+            },
+            ?TRACE("Received data: ~s; Qos: ~p~n", [Data, QoS]),
 
-            ?TRACE("Received data: ~s~n", [Data]),
-
+            {ok, _} = write_register(SPI, ?REG_FIFO_ADDR_PTR, 0),
+            %%
+            %% Notify handler
+            %%
             Lora = self(),
             case maps:get(receive_handler, State#state.config, undefined) of
                 undefined ->
                     ok;
                 Handler ->
-                    Frequency = maps:get(frequency, State#state.config),
-                    QoS = #{
-                        rssi => get_rssi(SPI, Frequency),
-                        snr => get_snr(SPI)
-                    },
-                    spawn(fun() -> Handler(Lora, Data, QoS) end)
-            end,
-
-            {ok, _} = write_register(SPI, ?REG_FIFO_ADDR_PTR, 0);
-
+                    ReplyData = case maps:get(binary, State#state.config, true) of
+                        true ->
+                            list_to_binary(Data);
+                        _ ->
+                            Data
+                    end,
+                    % erlang:garbage_collect(),
+                    if
+                        is_pid(Handler) ->
+                            Handler ! {lora_receive, Lora, ReplyData, QoS};
+                        is_function(Handler) ->
+                            spawn(fun() -> Handler(Lora, ReplyData, QoS) end);
+                        true ->
+                            ok
+                    end
+            end;
         (IRQFlags band ?IRQ_RX_DONE_MASK) /= 0 ->
             ?TRACE("CRC error~n", []);
 

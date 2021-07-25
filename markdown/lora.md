@@ -68,15 +68,16 @@ The `atomvm_lib` LoRa driver is initialized with a map containing keys and value
 
 | Key | Type | Required | Default Value | Description |
 |-----|-------|----------|---------------|-------------|
-| `frequency` | `freq_915mhz \| freq_868mhz` | no  | `freq_915mhz` | Wireless frequency (typically determined by geographic region). |
-| `bandwidth` | `bw_125khz` | no  | `bw_125khz` | Signal bandwidth (increased bandwidth improve throughput, at the expense of range). |
+| `frequency` | `freq_169mhz \| freq_433mhz \| freq_868mhz \| freq_915mhz \| non_neg_integer()` | no  | `freq_915mhz` | Wireless frequency (typically determined by geographic region). |
+| `bandwidth` | `bw_7_8khz \| bw_10_4khz \| bw_15_6khz \| bw_20_8khz \| bw_31_25khz \| bw_41_7khz \| bw_62_5khz \| bw_125khz \| bw_250khz \| bw_500khz` | no  | `bw_125khz` | Signal bandwidth (increased bandwidth improve throughput, at the expense of range). |
 | `tx_power` | `2..17` | no  | `2` | Transmission power.  More power will increase range, at the expense of power consumption. |
-| `spreading_factor` | `6..12` | no  | `8` | LoRa spreading factor.  This value must be known in advance by the sender and receiver.  The higher the spreading factor, the better the range, at the expense of speed of transmission. |
+| `spreading_factor` | `6..12` | no  | `7` | LoRa spreading factor.  This value must be known in advance by the sender and receiver.  The higher the spreading factor, the better the range, at the expense of speed of transmission. |
 | `preamble_length` | `6..65535` | no  | `8` |  |
-| `error_coding_rate` | `ecr_4_5 \| ecr_4_6 \| ecr_4_7 \| ecr_4_8` | no  | `ecr_4_5` | The error coding rate. |
-| `header_mode` | `implicit \| explicit` | no  | `implicit` | LoRa header mode. |
+| `coding_rate` | `cr_4_5 \| cr_4_6 \| cr_4_7 \| cr_4_8` | no  | `cr_4_5` | The error coding rate. |
+| `header_mode` | `implicit \| explicit` | no  | `explicit` | LoRa header mode. |
 | `sync_word` | `TODO` | no  | `0x12` | TODO. |
-| `enable_crc` | `true \| false` | no  | `false` | TODO. |
+| `lna_gain` | `lna_0 \| lna_1 \| lna_2 \| lna_3 \| lna_4 \| lna_5 \| lna_6 \| auto` | no  | `auto` | TODO. |
+| `enable_crc` | `true \| false` | no  | `true` | TODO. |
 | `invert_iq` | `true \| false` | no  | `false` | TODO. |
 | `dio_0` | `non_neg_integer()` | yes, if receiving messages |  | ESP32 Pin used to signal receipt of a message.  This pin should be connected to the DIO_0 pin on the LoRa modem.  See [Receiving Data](#Receiving_Data) below for more information. |
 | `receive_handler` | `fun(Lora::pid(), Message::term(), QoS::qos()) -> any().` | likely, if receiving messages |  | Callback function that is invoked when a message is received.  See [Receiving Data](#Receiving_Data) below for more information. |

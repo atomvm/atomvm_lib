@@ -34,10 +34,13 @@ start() ->
     ],
     SPI = spi:open(SPIConfig),
     LoraConfig = #{
+        spi => SPI,
         frequency => freq_915mhz,
         bandwidth => bw_125khz
+        % , spreading_factor => 10
+        % , tx_power => 15
     },
-    {ok, Lora} = lora:start(SPI, LoraConfig),
+    {ok, Lora} = lora:start(LoraConfig),
     io:format("Lora started.  Sending messages...~n"),
     loop(Lora, 0).
 
