@@ -19,6 +19,7 @@
 #define __ATOMVM_LIB_H
 
 #include <globalcontext.h>
+#include <nifs.h>
 
 void atomvm_lib_init(GlobalContext *global);
 const struct Nif *atomvm_lib_get_nif(const char *nifname);

@@ -20,11 +20,16 @@ Make sure to also include the `atomvm_rebar3_plugin`, so that you can generate A
 
 You can then use the `packbeam` and `esp32_flash` targets to upload your application to a device.
 
+Some of the modules in this library make use of AtomVM components, which are native-C extensions to the AtomVM virtual machine.  For more information about these components and how to build them into the AtomVM virtual machines, see:
+
+* [`atomvm_lib` Components](markdown/components.md)
+
 # `atomvm_lib` modules
 
-The `atomvm_lib` library contains the following features:
+The `atomvm_lib` library includes the following features:
 
-* [BME280](markdown/bme280.md)
-* [BH1750](markdown/bh1750.md)
+* [BME280](markdown/bme280.md) (Temperature, humidity, and pressure sensor)
+* [BH1750](markdown/bh1750.md) (Luminosity sensor)
 * [LEDC PWM](markdown/ledc_pwm.md)
-* [LoRa](markdown/lora.md)
+* [LoRa](markdown/lora.md) (SX127X transceiver)
+* [SSD1306](markdown/ssd1306.md) (128x64 pixel monochrome OLED display)

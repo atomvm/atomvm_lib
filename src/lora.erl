@@ -40,7 +40,7 @@
 
 -behavior(gen_server).
 
-% -define(TRACE(F, A), io:format("TRACE>>  " ++ F, A)).
+%-define(TRACE(F, A), io:format("TRACE>>  [lora] " ++ F, A)).
 -define(TRACE(F, A), ok).
 
 -define (REG_FIFO, 16#00).
@@ -122,7 +122,7 @@
 -type tx_power() :: 2..17.
 -type spreading_factor() :: 6..12.
 -type preamble_length() :: 6..65535.
--type lna_gain() :: lna_0 | lna_1 | lna_2 | lna_3 | lna_4 | lna_5 | lna_6 | auto.
+-type lna_gain() :: lna_1 | lna_2 | lna_3 | lna_4 | lna_5 | lna_6 | auto.
 
 -type coding_rate() :: cr_4_5 | cr_4_6 | cr_4_7 | cr_4_8.
 -type header_mode() :: implicit | explicit.
@@ -175,6 +175,7 @@ dump_registers(Lora) ->
 
 %% @hidden
 init(Config) ->
+    ?TRACE("init(~p)", [Config]),
     SPI = get_or_load_spi(maps:get(spi, Config)),
     case verify_version(SPI) of
         ok ->
@@ -198,7 +199,7 @@ init(Config) ->
 %% @private
 get_or_load_spi(SPI) when is_pid(SPI) ->
     SPI;
-get_or_load_spi(SPIConfig) when is_map(SPIConfig) ->
+get_or_load_spi(SPIConfig) when is_list(SPIConfig) ->
     spi:open(SPIConfig).
 
 %% @hidden
@@ -214,7 +215,7 @@ handle_call({broadcast, Message}, _From, State) ->
 handle_call(dump_registers, _From, State) ->
     {reply, do_dump_registers(State#state.spi), State};
 handle_call(Request, _From, State) ->
-    io:format("Unhandled call.  Request: ~p~n", [Request]),
+    io:format("lora Unhandled call.  Request: ~p~n", [Request]),
     {reply, error, State}.
 
 %% @hidden
@@ -582,8 +583,10 @@ do_receive(State) ->
     {ok, IRQFlags} = read_register(SPI, ?REG_IRQ_FLAGS),
     {ok, _} = write_register(SPI, ?REG_IRQ_FLAGS, IRQFlags),
 
-    if
-        ((IRQFlags band ?IRQ_RX_DONE_MASK) /= 0) andalso ((IRQFlags band ?IRQ_PAYLOAD_CRC_ERROR_MASK) == 0) ->
+    RxDone = (IRQFlags band ?IRQ_RX_DONE_MASK) =/= 0,
+    CrcError = (IRQFlags band ?IRQ_PAYLOAD_CRC_ERROR_MASK) =/= 0,
+    case {RxDone, CrcError} of
+        {true, false} ->
             {ok, PacketLength} = read_register(SPI, ?REG_RX_NB_BYTES),
             {ok, CurrentAddr} = read_register(SPI, ?REG_FIFO_RX_CURRENT_ADDR),
 
@@ -621,10 +624,9 @@ do_receive(State) ->
                             ok
                     end
             end;
-        (IRQFlags band ?IRQ_RX_DONE_MASK) /= 0 ->
+        {_, true} ->
             ?TRACE("CRC error~n", []);
-
-        true ->
+        {_, _} ->
             ?TRACE("Unexpected IRQFlags: ~p~n", [IRQFlags])
     end.
 

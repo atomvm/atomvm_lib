@@ -16,7 +16,7 @@
 %%
 -module(diag).
 
--export([print_all_proc_info/0, print_proc_info/0, print_proc_info/1]).
+-export([print_all_proc_info/0, print_proc_info/0, print_proc_info/1, get_all_proc_info/0, get_proc_info/0, get_proc_info/1]).
 
 
 print_all_proc_info() ->
@@ -37,3 +37,28 @@ print_proc_info(Proc) ->
     io:format("    message_queue_len: ~p~n", [erlang:process_info(Proc, message_queue_len)]),
     io:format("    memory: ~p~n", [erlang:process_info(Proc, memory)]),
     ok.
+
+get_all_proc_info() ->
+    FreeHeapSize = erlang:system_info(esp32_free_heap_size),
+    % RefcBinaryInfo = erlang:system_info(refc_binary_info),
+    #{
+        procs => [get_proc_info(Proc) || Proc <- erlang:processes()],
+        esp32_free_heap_size => FreeHeapSize
+        % ,refc_binary_info => RefcBinaryInfo
+    }.
+
+get_proc_info() ->
+    get_proc_info(self()).
+
+get_proc_info(Proc) ->
+    {_, HeapSize} = erlang:process_info(Proc, heap_size),
+    {_, StackSize} = erlang:process_info(Proc, stack_size),
+    {_, MessageQueueLen} = erlang:process_info(Proc, message_queue_len),
+    {_, Memory} = erlang:process_info(Proc, memory),
+    #{
+        proc => Proc,
+        heap_size => HeapSize,
+        stack_size => StackSize,
+        message_queue_len => MessageQueueLen,
+        memory => Memory
+    }.
