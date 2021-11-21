@@ -13,7 +13,7 @@ This page provides instructions for building and linking `atomvm_lib` components
 * [IDF SDK](https://docs.espressif.com/projects/esp-idf/en/release-v3.3/index.html) and tool chain, and its pre-requisite software.
 * [AtomVM](https://github.com/bettio/AtomVM) source tree, and its pre-requisite software.
 
-> Note. These instructions assume you have downloaded the AtomVM virtual machine and have the required software needed to build the VM, including the IDF SDK and tool chain.  Instructions for building AtomVM are outside of the scope of this document.  For information about how to build AtomVM targeted for the ESP32, see the [AtomVM ESP32 Build Instructions](TODO).
+> Note. These instructions assume you have downloaded the AtomVM virtual machine and have the required software needed to build the VM, including the IDF SDK and tool chain.  Instructions for building AtomVM are outside of the scope of this document.  For information about how to build AtomVM targeted for the ESP32, see the [AtomVM Implementors Guide](http://doc.atomvm.net).
 
 ## `atomvm_lib` Build Instructions
 
@@ -55,6 +55,6 @@ This should create a new AtomVM image, with the `atomvm_lib` Nifs linked into it
 
 > Note.  If the `atomvm_lib` Component is an AtomVM Port, then the instructions are similar to the above, except for the name, and the fact that the file you will append to is called `src/platforms/esp32/main/component_ports.txt`.
 
-Now that you have built an AtomVM image containing `atomvm_lib` components, you can now flash the AtomVM image to your device.
+Now that you have built an AtomVM VM image containing `atomvm_lib` components, you can now flash the AtomVM image to your device.
 
-> Note.  Flashing the AtomVM image, containing the AtomVM VM and core Erlang libraries is outside of the scope of this document.  For information about how the flash the AtomVM image, see the [AtomVM Deployment Guide](TODO).
+> Note.  Flashing the AtomVM image, containing the AtomVM VM and core Erlang libraries is outside of the scope of this document.  For information about how to create an AtomVM image and flash it to an ESP32, see the [AtomVM Implementors Guide](http://doc.atomvm.net).

@@ -23,8 +23,8 @@
 
 -behavior(gen_server).
 
-%-define(TRACE(F, A), io:format("TRACE>>  [lora_node] " ++ F ++ "~n", A)).
--define(TRACE(F, A), ok).
+% -define(TRACE_ENABLED, true).
+-include_lib("atomvm_lib/include/trace.hrl").
 
 start(Name, Config) ->
     gen_server:start(?MODULE, {Name, Config}, []).
@@ -147,6 +147,7 @@ do_cast(State, ToNodeName, Term) ->
     N = State#state.n,
     RequestId = create_request_id(State#state.name, ToNodeName),
     Payload = create_lora_cast_message(RequestId, Term),
+    ?TRACE("spawning do_cast_async with payload ~p", [Payload]),
     spawn(fun() -> do_cast_async(State#state.lora, Payload) end),
     State#state{n=N+1}.
 
@@ -180,6 +181,7 @@ do_call_async(LoraNode, TimeoutMs, Lora, RequestId, Payload, From) ->
     LoraNode ! {request_completed, RequestId}.
 
 do_cast_async(Lora, Payload) ->
+    ?TRACE("Broadcasting payload to Lora ~p", [Lora]),
     lora:broadcast(Lora, Payload).
 
 

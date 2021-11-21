@@ -33,3 +33,6 @@ The `atomvm_lib` library includes the following features:
 * [LEDC PWM](markdown/ledc_pwm.md)
 * [LoRa](markdown/lora.md) (SX127X transceiver)
 * [SSD1306](markdown/ssd1306.md) (128x64 pixel monochrome OLED display)
+* [GPS](markdown/gps.md) (NMEA-based GPS sensors)
+* [ADC](markdown/adc.md) (Read ESP32 ADC pins)
+* [MQTT Client](markdown/mqtt_client.md) (MQTT Client Library)

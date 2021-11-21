@@ -40,8 +40,8 @@
 
 -behavior(gen_server).
 
-%-define(TRACE(F, A), io:format("TRACE>>  [lora] " ++ F, A)).
--define(TRACE(F, A), ok).
+% -define(TRACE_ENABLED, true).
+-include_lib("atomvm_lib/include/trace.hrl").
 
 -define (REG_FIFO, 16#00).
 -define (REG_OP_MODE, 16#01).
