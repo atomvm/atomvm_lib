@@ -16,7 +16,7 @@
 %%
 -module(lora_node).
 
--export([start/2, call/3, cast/3, multicast/2]).
+-export([start/2, call/3, cast/3, multicast/2, get_lora/1]).
 
 %% gen_server
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2]).
@@ -38,6 +38,9 @@ multicast(LauraNode, Term) ->
 
 call(LoraNode, ToNodeName, Term) ->
     gen_server:call(LoraNode, {call, ToNodeName, Term}).
+
+get_lora(LoraNode) ->
+    gen_server:call(LoraNode, get_lora).
 
 %%%
 %%% gen_server implementation
@@ -86,6 +89,8 @@ handle_call({call, ToNodeName, Term}, From, State) ->
 %     ?TRACE("handle_multicast: {multicast, ~p}", [Term]),
 %     NewState = do_multicast(State, From, Term),
 %     {noreply, NewState};
+handle_call(get_lora, _From, State) ->
+    {reply, State#state.lora, State};
 handle_call(Request, _From, State) ->
     io:format("lora_node Unhandled call.  Request: ~p~n", [Request]),
     {reply, error, State}.

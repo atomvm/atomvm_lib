@@ -31,7 +31,7 @@
 %%%
 %%% @end
 
--export([start/1, stop/1, broadcast/2]).
+-export([start/1, stop/1, broadcast/2, sleep/1]).
 %% debugging
 -export([dump_registers/1]).
 
@@ -159,6 +159,10 @@ stop(Lora) ->
 broadcast(Lora, Message) ->
     gen_server:call(Lora, {broadcast, Message}).
 
+-spec sleep(Lora::lora()) -> ok.
+sleep(Lora) ->
+    gen_server:call(Lora, sleep).
+
 %% @hidden
 dump_registers(Lora) ->
     gen_server:call(Lora, dump_registers).
@@ -177,6 +181,7 @@ dump_registers(Lora) ->
 init(Config) ->
     ?TRACE("init(~p)", [Config]),
     SPI = get_or_load_spi(maps:get(spi, Config)),
+    timer:sleep(424),
     case verify_version(SPI) of
         ok ->
             case init_lora(SPI, Config) of
@@ -190,10 +195,10 @@ init(Config) ->
                     },
                     {ok, State};
                 LoraError ->
-                    LoraError
+                    {stop, LoraError}
             end;
         VersionError ->
-            VersionError
+            {stop, VersionError}
     end.
 
 %% @private
@@ -214,6 +219,9 @@ handle_call({broadcast, Message}, _From, State) ->
     {reply, Reply, State};
 handle_call(dump_registers, _From, State) ->
     {reply, do_dump_registers(State#state.spi), State};
+handle_call(sleep, _From, State) ->
+    do_sleep(State#state.spi),
+    {reply, ok, State};
 handle_call(Request, _From, State) ->
     io:format("lora Unhandled call.  Request: ~p~n", [Request]),
     {reply, error, State}.
@@ -241,7 +249,7 @@ verify_config(Config) ->
 
 %% @private
 verify_version(SPI) ->
-    ?TRACE("verify_version~n", []),
+    ?TRACE("verify_version", []),
     case read_register(SPI, ?REG_VERSION) of
         {ok, 16#12} ->
             ok;
@@ -283,13 +291,13 @@ set_mode(SPI, standby) ->
 set_mode(SPI, recv) ->
     set_mode(SPI, ?MODE_RX_CONTINUOUS);
 set_mode(SPI, Mode) ->
-    ?TRACE("set_mode ~p~n", [Mode]),
+    ?TRACE("set_mode ~p", [Mode]),
     {ok, _} = write_register(SPI, ?REG_OP_MODE, ?MODE_LONG_RANGE_MODE bor Mode),
     ok.
 
 %% @private
 get_mode(SPI) ->
-    ?TRACE("get_mode~n", []),
+    ?TRACE("get_mode", []),
     {ok, Mode} = read_register(SPI, ?REG_OP_MODE),
     Mode.
 
@@ -316,7 +324,7 @@ set_frequency(SPI, Freq) when is_integer(Freq) ->
 
 %% @private
 set_frequency_internal(SPI, F) when is_integer(F) ->
-    ?TRACE("set_frequency_internal ~p~n", [F]),
+    ?TRACE("set_frequency_internal ~p", [F]),
     {ok, _} = write_register(SPI, ?REG_FRF_MSB, ((F bsr 16) band 16#FF)),
     {ok, _} = write_register(SPI, ?REG_FRF_MID, ((F bsr 8) band 16#FF)),
     {ok, _} = write_register(SPI, ?REG_FRF_LSB, F band 16#FF),
@@ -344,27 +352,27 @@ set_signal_bandwidth(SPI, bw_250khz) ->
 set_signal_bandwidth(SPI, bw_500khz) ->
     set_signal_bandwidth(SPI, 9);
 set_signal_bandwidth(SPI, I) ->
-    ?TRACE("set_signal_bandwidth ~p~n", [I]),
+    ?TRACE("set_signal_bandwidth ~p", [I]),
     {ok, ModemConfig1} = read_register(SPI, ?REG_MODEM_CONFIG_1),
     {ok, _} = write_register(SPI, ?REG_MODEM_CONFIG_1, (ModemConfig1 band 16#0F) bor (I bsl 4)),
     ok.
 
 %% @private
 set_lna_boost(SPI) ->
-    ?TRACE("set_lna_boost~n", []),
+    ?TRACE("set_lna_boost", []),
     {ok, LNA} = read_register(SPI, ?REG_LNA),
     {ok, _} = write_register(SPI, ?REG_LNA, LNA bor 16#03),
     ok.
 
 %% @private
 set_automatic_gain_control(SPI) ->
-    ?TRACE("set_automatic_gain_control~n", []),
+    ?TRACE("set_automatic_gain_control", []),
     {ok, _} = write_register(SPI, ?REG_MODEM_CONFIG_3, ?AUTO_AGC_FLAG),
     ok.
 
 %% @private
 set_tx_power(SPI, Level) when 2 =< Level andalso Level =< 17 ->
-    ?TRACE("set_tx_power ~p~n", [Level]),
+    ?TRACE("set_tx_power ~p", [Level]),
     {ok, _} = write_register(SPI, ?REG_PADAC, 16#87),
     {ok, _} = write_register(SPI, ?REG_PA_CONFIG, 16#80 bor (Level - 2)),
     ok;
@@ -373,19 +381,19 @@ set_tx_power(_SPI, Level) ->
 
 %% @private
 set_header_mode(SPI, implicit) ->
-    ?TRACE("set_header_mode implicit~n", []),
+    ?TRACE("set_header_mode implicit", []),
     {ok, ModemConfig1} = read_register(SPI, ?REG_MODEM_CONFIG_1),
     {ok, _} = write_register(SPI, ?REG_MODEM_CONFIG_1, ModemConfig1 bor 16#01),
     ok;
 set_header_mode(SPI, explicit) ->
-    ?TRACE("set_header_mode explicit~n", []),
+    ?TRACE("set_header_mode explicit", []),
     {ok, ModemConfig1} = read_register(SPI, ?REG_MODEM_CONFIG_1),
     {ok, _} = write_register(SPI, ?REG_MODEM_CONFIG_1, ModemConfig1 band 16#FE),
     ok.
 
 %% @private
 set_spreading_factor(SPI, SF) ->
-    ?TRACE("set_spreading_factor ~p~n", [SF]),
+    ?TRACE("set_spreading_factor ~p", [SF]),
     {ok, _} = write_register(SPI, ?REG_DETECTION_OPTIMIZE, 16#c3),
     {ok, _} = write_register(SPI, ?REG_DETECTION_THRESHOLD, 16#0a),
     {ok, ModemConfig2} = read_register(SPI, ?REG_MODEM_CONFIG_2),
@@ -402,7 +410,7 @@ set_coding_rate(SPI, cr_4_7) ->
 set_coding_rate(SPI, cr_4_8) ->
     set_coding_rate(SPI, 8);
 set_coding_rate(SPI, Denominator) ->
-    ?TRACE("set_coding_rate ~p~n", [Denominator]),
+    ?TRACE("set_coding_rate ~p", [Denominator]),
     Cr = Denominator - 4,
     {ok, ModemConfig1} = read_register(SPI, ?REG_MODEM_CONFIG_1),
     {ok, _} = write_register(
@@ -414,32 +422,32 @@ set_coding_rate(SPI, Denominator) ->
 
 %% @private
 set_preamble_length(SPI, Length) ->
-    ?TRACE("set_preamble_length ~p~n", [Length]),
+    ?TRACE("set_preamble_length ~p", [Length]),
     {ok, _} = write_register(SPI, ?REG_PREAMBLE_MSB,  (Length bsr 8) band 16#FF),
     {ok, _} = write_register(SPI, ?REG_PREAMBLE_LSB,  (Length bsr 0) band 16#FF),
     ok.
 
 %% @private
 set_sync_word(SPI, Word) ->
-    ?TRACE("set_sync_word~n", []),
+    ?TRACE("set_sync_word", []),
     {ok, _} = write_register(SPI, ?REG_SYNC_WORD, Word),
     ok.
 
 %% @private
 set_enable_crc(SPI, true) ->
-    ?TRACE("set_enable_crc ~p~n", [true]),
+    ?TRACE("set_enable_crc ~p", [true]),
     {ok, ModemConfig2} = read_register(SPI, ?REG_MODEM_CONFIG_2),
     {ok, _} = write_register(SPI, ?REG_MODEM_CONFIG_2, ModemConfig2 bor 16#04),
     ok;
 set_enable_crc(SPI, false) ->
-    ?TRACE("set_enable_crc ~p~n", [false]),
+    ?TRACE("set_enable_crc ~p", [false]),
     {ok, ModemConfig2} = read_register(SPI, ?REG_MODEM_CONFIG_2),
     {ok, _} = write_register(SPI, ?REG_MODEM_CONFIG_2, ModemConfig2 band 16#FB),
     ok.
 
 %% @private
 set_invert_iq(SPI, true) ->
-    ?TRACE("set_invert_iq ~p~n", [true]),
+    ?TRACE("set_invert_iq ~p", [true]),
     {ok, InvertIQ} = read_register(SPI, ?REG_INVERTIQ),
     Value = (InvertIQ band ?RFLR_INVERTIQ_TX_MASK band ?RFLR_INVERTIQ_RX_MASK)
             bor ?RFLR_INVERTIQ_RX_ON bor ?RFLR_INVERTIQ_TX_ON,
@@ -447,7 +455,7 @@ set_invert_iq(SPI, true) ->
     {ok, _} = write_register(SPI, ?REG_INVERTIQ2, ?RFLR_INVERTIQ2_ON),
     ok;
 set_invert_iq(SPI, false) ->
-    ?TRACE("set_invert_iq ~p~n", [false]),
+    ?TRACE("set_invert_iq ~p", [false]),
     {ok, InvertIQ} = read_register(SPI, ?REG_INVERTIQ),
     Value = (InvertIQ band ?RFLR_INVERTIQ_TX_MASK band ?RFLR_INVERTIQ_RX_MASK)
             bor ?RFLR_INVERTIQ_RX_OFF bor ?RFLR_INVERTIQ_TX_OFF,
@@ -457,7 +465,7 @@ set_invert_iq(SPI, false) ->
 
 %% @private
 set_base_addr(SPI) ->
-    ?TRACE("set_base_addr~n", []),
+    ?TRACE("set_base_addr", []),
     {ok, _} = write_register(SPI, ?REG_FIFO_TX_BASE_ADDR, 0),
     {ok, _} = write_register(SPI, ?REG_FIFO_RX_BASE_ADDR, 0),
     ok.
@@ -466,7 +474,7 @@ set_base_addr(SPI) ->
 maybe_set_dio_0(_SPI, _GPIO, undefined) ->
     ok;
 maybe_set_dio_0(SPI, GPIO, Pin) ->
-    ?TRACE("maybe_set_dio_0 ~p~n", [Pin]),
+    ?TRACE("maybe_set_dio_0 ~p", [Pin]),
     {ok, _} = write_register(SPI, ?REG_DIO_MAPPING_1, 16#00),
     gpio:set_int(GPIO, Pin, rising),
     ok.
@@ -475,7 +483,7 @@ maybe_set_dio_0(SPI, GPIO, Pin) ->
 maybe_reset(_GPIO, undefined) ->
     ok;
 maybe_reset(GPIO, Pin) ->
-    ?TRACE("maybe_reset ~p~n", [Pin]),
+    ?TRACE("maybe_reset ~p", [Pin]),
     gpio:set_direction(GPIO, Pin, output),
     gpio:set_level(GPIO, Pin, 0),
     timer:sleep(20),
@@ -507,7 +515,7 @@ do_broadcast(SPI, Data) ->
     %%
     %% prepare
     %%
-    ?TRACE("preparing transmit...~n", []),
+    ?TRACE("preparing transmit...", []),
     set_mode(SPI, standby),
     set_header_mode(SPI, explicit),
     {ok, _} = write_register(SPI, ?REG_FIFO_ADDR_PTR, 0),
@@ -515,14 +523,14 @@ do_broadcast(SPI, Data) ->
     %%
     %% write data to FIFO in Lora chip
     %%
-    ?TRACE("writing data to FIFO: ~p~n", [Data]),
+    ?TRACE("writing data to FIFO: ~p", [Data]),
     {ok, CurrentLength} = read_register(SPI, 16#22),
     Len = write_packet_data(SPI, Data),
     {ok, _} = write_register(SPI, ?REG_PAYLOAD_LENGTH, CurrentLength + Len),
     %%
     %% transmit and wait for signal
     %%
-    ?TRACE("transmitting~n", []),
+    ?TRACE("transmitting", []),
     {ok, _} = write_register(SPI, ?REG_OP_MODE, ?MODE_LONG_RANGE_MODE bor ?MODE_TX),
     wait_flags(SPI, ?REG_IRQ_FLAGS, ?IRQ_TX_DONE_MASK),
     {ok, _} = write_register(SPI, ?REG_IRQ_FLAGS, ?IRQ_TX_DONE_MASK),
@@ -530,7 +538,7 @@ do_broadcast(SPI, Data) ->
     %% drop back into receive mode
     %%
     set_mode(SPI, recv),
-    ?TRACE("done~n", []),
+    ?TRACE("done", []),
     ok.
 
 %% @private
@@ -597,7 +605,7 @@ do_receive(State) ->
                 rssi => get_rssi(SPI, Frequency),
                 snr => get_snr(SPI)
             },
-            ?TRACE("Received data: ~s; Qos: ~p~n", [Data, QoS]),
+            ?TRACE("Received data: ~s; Qos: ~p", [Data, QoS]),
 
             {ok, _} = write_register(SPI, ?REG_FIFO_ADDR_PTR, 0),
             %%
@@ -625,9 +633,9 @@ do_receive(State) ->
                     end
             end;
         {_, true} ->
-            ?TRACE("CRC error~n", []);
+            ?TRACE("CRC error", []);
         {_, _} ->
-            ?TRACE("Unexpected IRQFlags: ~p~n", [IRQFlags])
+            ?TRACE("Unexpected IRQFlags: ~p", [IRQFlags])
     end.
 
 %% @private
@@ -640,13 +648,13 @@ read_packet_data(SPI, Len) ->
 %% @private
 read_register(SPI, Address) ->
     Response = spi:read_at(SPI, Address, 8),
-    ?TRACE("read(~p) -> ~p~n", [Address, Response]),
+    ?TRACE("read(~p) -> ~p", [Address, Response]),
     Response.
 
 %% @private
 write_register(SPI, Address, Data) ->
     Response = spi:write_at(SPI, Address, 8, Data),
-    ?TRACE("write(~p, ~p) -> ~p~n", [Address, Data, Response]),
+    ?TRACE("write(~p, ~p) -> ~p", [Address, Data, Response]),
     Response.
 
 
@@ -701,7 +709,7 @@ get_registers() ->
     ].
 
 do_dump_registers(SPI) ->
-    ?TRACE("do_dump_registers~n", []),
+    ?TRACE("do_dump_registers", []),
     Mode = get_mode(SPI),
     Registers = get_registers(),
     try
@@ -716,6 +724,10 @@ do_dump_registers(SPI) ->
     after
         set_mode(SPI, Mode)
     end.
+
+do_sleep(SPI) ->
+    ?TRACE("do_sleep", []),
+    set_mode(SPI, sleep).
 
 to_hex(Value) ->
     "0x" ++ codec:encode(Value, hex).

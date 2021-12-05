@@ -274,7 +274,13 @@ handle_info({gps_reading, GPSReading}, State) ->
                 GPSReading,
                 maps:get(gps_reading_filter, State#state.config, undefined)
             ),
-            spawn(fun() -> Fun(Self, NewReading) end)
+            spawn(fun() -> Fun(Self, NewReading) end);
+        Pid when is_pid(Pid) ->
+            NewReading = maybe_filter_gps_reading(
+                GPSReading,
+                maps:get(gps_reading_filter, State#state.config, undefined)
+            ),
+            Pid ! {gps_reading, NewReading}
     end,
     erlang:garbage_collect(),
     {noreply, State#state{latest_reading=GPSReading}};

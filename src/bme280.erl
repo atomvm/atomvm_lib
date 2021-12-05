@@ -204,7 +204,7 @@ soft_reset(BME) ->
 %% @hidden
 init([SDAPin, SCLPin, Options]) ->
     FreqHz = proplists:get_value(freq_hz, Options, 400000),
-    Port = open_port({spawn, "i2c"}, [{scl_io_num, SCLPin}, {sda_io_num, SDAPin}, {i2c_clock_hz, FreqHz}]),
+    Port = i2c:open([{scl_io_num, SCLPin}, {sda_io_num, SDAPin}, {i2c_clock_hz, FreqHz}]),
     Calibration = read_calibration_data(Port),
     {ok, #state{
         port = Port,
