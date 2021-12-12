@@ -523,7 +523,7 @@ do_broadcast(SPI, Data) ->
     %%
     %% write data to FIFO in Lora chip
     %%
-    ?TRACE("writing data to FIFO: ~p", [Data]),
+    ?TRACE("writing data to FIFO (len=~p): ~p", [byte_size(Data), Data]),
     {ok, CurrentLength} = read_register(SPI, 16#22),
     Len = write_packet_data(SPI, Data),
     {ok, _} = write_register(SPI, ?REG_PAYLOAD_LENGTH, CurrentLength + Len),
@@ -605,7 +605,7 @@ do_receive(State) ->
                 rssi => get_rssi(SPI, Frequency),
                 snr => get_snr(SPI)
             },
-            ?TRACE("Received data: ~s; Qos: ~p", [Data, QoS]),
+            ?TRACE("Received data (len=~p): ~s; Qos: ~p", [byte_size(Data), Data, QoS]),
 
             {ok, _} = write_register(SPI, ?REG_FIFO_ADDR_PTR, 0),
             %%
@@ -648,13 +648,13 @@ read_packet_data(SPI, Len) ->
 %% @private
 read_register(SPI, Address) ->
     Response = spi:read_at(SPI, Address, 8),
-    ?TRACE("read(~p) -> ~p", [Address, Response]),
+    % ?TRACE("read(~p) -> ~p", [Address, Response]),
     Response.
 
 %% @private
 write_register(SPI, Address, Data) ->
     Response = spi:write_at(SPI, Address, 8, Data),
-    ?TRACE("write(~p, ~p) -> ~p", [Address, Data, Response]),
+    % ?TRACE("write(~p, ~p) -> ~p", [Address, Data, Response]),
     Response.
 
 
