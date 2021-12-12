@@ -19,8 +19,11 @@
 -export([start/0]).
 
 start() ->
-    SDAPin = 21, SCLPin = 22,
-    {ok, BME} = bme280:start(SDAPin, SCLPin),
+    {ok, I2CBus} = i2c_bus:start(#{
+        sda => 21,
+        scl => 22
+    }),
+    {ok, BME} = bme280:start(I2CBus),
     loop(BME).
 
 loop(BME) ->

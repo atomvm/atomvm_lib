@@ -30,14 +30,15 @@
 
 -behaviour(gen_server).
 
--export([start/2, start/3, stop/1, take_reading/1, reset/1]).
+-export([start/1, start/2, stop/1, take_reading/1, reset/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--type pin() :: non_neg_integer().
--type freq_hz() :: non_neg_integer().
+% -define(TRACE_ENABLED, true).
+-include_lib("atomvm_lib/include/trace.hrl").
+
 -type resolution() :: low | high | high2.
 -type mode() :: one_time | continuous.
--type option() :: {freq_hz, freq_hz()} |
+-type option() ::
             {resolution, resolution()} |
             {mode, mode()} |
             {owner, pid()}.
@@ -66,7 +67,7 @@
 -define(DEFAULT_MTREG, 69).
 
 -record(state, {
-    port,
+    i2c_bus,
     addr,
     mode,
     owner,
@@ -84,9 +85,9 @@
 %% @doc     Start the BH1750 driver.
 %% @end
 %%-----------------------------------------------------------------------------
--spec start(SDAPin::pin(), SCLPin::pin()) -> {ok, BH::bh()} | {error, Reason::term()}.
-start(SDAPin, SCLPin) ->
-    start(SDAPin, SCLPin, []).
+-spec start(I2CBus::i2c_bus:i2c_bus()) -> {ok, BH::bh()} | {error, Reason::term()}.
+start(I2CBus) ->
+    start(I2CBus, []).
 
 %%-----------------------------------------------------------------------------
 %% @param   SDAPin pin number for I2C SDA channel
@@ -108,9 +109,9 @@ start(SDAPin, SCLPin) ->
 %% The default `mode' is `forced'.  Other modes are not tested.
 %% @end
 %%-----------------------------------------------------------------------------
--spec start(SDAPin::pin(), SCLPin::pin(), Options::options()) -> {ok, BH::bh()} | {error, Reason::term()}.
-start(SDAPin, SCLPin, Options) ->
-    case gen_server:start(?MODULE, [SDAPin, SCLPin, maybe_add_self(Options)], []) of
+-spec start(I2CBus::i2c_bus:i2c_bus(), Options::options()) -> {ok, BH::bh()} | {error, Reason::term()}.
+start(I2CBus, Options) ->
+    case gen_server:start(?MODULE, {I2CBus, maybe_add_self(Options)}, []) of
         {ok, Pid} = R ->
             maybe_start_continuous(Pid, Options),
             R;
@@ -190,13 +191,11 @@ reset(BH) ->
 %%
 
 %% @hidden
-init([SDAPin, SCLPin, Options]) ->
-    FreqHz = proplists:get_value(freq_hz, Options, 400000),
-    Port = open_port({spawn, "i2c"}, [{scl_io_num, SCLPin}, {sda_io_num, SDAPin}, {i2c_clock_hz, FreqHz}]),
+init({I2CBus, Options}) ->
     Mode = normalize_mode(proplists:get_value(mode, Options, ?DEFAULT_MODE)),
     UpdateIntervalMs = proplists:get_value(update_interval_ms, Options, ?DEFAULT_UPDATE_INTERVAL_MS),
     State = #state{
-        port = Port,
+        i2c_bus = I2CBus,
         addr = normalize_addr(proplists:get_value(addr, Options, addr_l)),
         mode = Mode,
         update_interval_ms = UpdateIntervalMs,
@@ -204,7 +203,7 @@ init([SDAPin, SCLPin, Options]) ->
         resolution = normalize_resolution(proplists:get_value(resolution, Options, ?DEFAULT_RESOLUTION)),
         mtreg = normalize_mtreg(proplists:get_value(mtreg, Options, ?DEFAULT_MTREG))
     },
-    do_set_sensitivity(Port, State#state.addr, State#state.mtreg),
+    do_set_sensitivity(I2CBus, State#state.addr, State#state.mtreg),
     {ok, State}.
 
 %% private
@@ -300,15 +299,15 @@ code_change(_OldVsn, State, _Extra) ->
 %% @private
 do_take_reading(State) ->
     #state{
-        port = Port,
+        i2c_bus = I2CBus,
         addr = Address,
         resolution = Resolution,
         mode = Mode,
         mtreg = MtReg
     } = State,
-    ok = send_command(Port, Address, get_command(one_time, Resolution)),
+    ok = send_command(I2CBus, Address, get_command(one_time, Resolution)),
     timer:sleep(get_sleep_ms(Resolution, MtReg)),
-    Bin = i2c:read_bytes(Port, Address, 2),
+    Bin = i2c_bus:read_bytes(I2CBus, Address, 2),
     to_reading(Bin, Mode, MtReg).
 
 %% @private
@@ -327,43 +326,48 @@ multiply(A, B) ->
     rational:simplify(rational:reduce(rational:multiply(A, B))).
 
 %% @private
+divide(0, _B) ->
+    0;
 divide(A, B) ->
     rational:to_decimal(rational:reduce(rational:divide(A, B)), 2).
 
 %% @private
 do_start_continuous_reading(State) ->
     #state{
-        port = Port,
+        i2c_bus = I2CBus,
         addr = Address,
         resolution = Resolution,
         mtreg = MtReg
     } = State,
-    ok = send_command(Port, Address, get_command(continuous, Resolution)),
+    ok = send_command(I2CBus, Address, get_command(continuous, Resolution)),
     timer:sleep(get_sleep_ms(Resolution, MtReg)).
 
 do_continuous_reading(State) ->
     #state{
-        port = Port,
+        i2c_bus = I2CBus,
         addr = Address,
         mode = Mode,
         mtreg = MtReg
     } = State,
-    Bin = i2c:read_bytes(Port, Address, 2),
+    Bin = i2c_bus:read_bytes(I2CBus, Address, 2),
     to_reading(Bin, Mode, MtReg).
 
-do_set_sensitivity(Port, Address, MtReg) ->
-    send_command(Port, Address, ?BH1750_POWER_ON),
+do_set_sensitivity(I2CBus, Address, MtReg) ->
+    send_command(I2CBus, Address, ?BH1750_POWER_ON),
     High = (MtReg band 16#F8) bor 16#04,
-    send_command(Port, Address, High),
+    send_command(I2CBus, Address, High),
     Low = 16#60 bor (MtReg band 16#1F),
-    send_command(Port, Address, Low),
-    send_command(Port, Address, ?BH1750_POWER_DOWN).
+    send_command(I2CBus, Address, Low),
+    send_command(I2CBus, Address, ?BH1750_POWER_DOWN).
 
 %% @private
-send_command(Port, Address, Command) ->
-    ok = i2c:begin_transmission(Port, Address),
-    ok = i2c:write_byte(Port, Command),
-    ok = i2c:end_transmission(Port).
+send_command(I2CBus, Address, Command) ->
+    % ok = i2c_bus:begin_transmission(I2CBus, Address),
+    % ok = i2c_bus:write_byte(I2CBus, Command),
+    % ok = i2c_bus:end_transmission(I2CBus).
+    i2c_bus:enqueue(I2CBus, Address, [
+        fun(Port, _Address) -> i2c:write_byte(Port, Command) end
+    ]).
 
 %% @private
 get_command(one_time, high) ->

@@ -19,9 +19,14 @@
 -export([start/0]).
 
 start() ->
-    SDAPin = 21, SCLPin = 22,
-    Mode = one_time, %% change to continuous to receive continuous readings
-    {ok, BH} = bh1750:start(SDAPin, SCLPin, [{mode, Mode}]),
+    {ok, I2CBus} = i2c_bus:start(
+        #{
+            sda => 21,
+            scl => 22
+        }
+    ),
+    Mode = continuous, %% change to continuous to receive continuous readings
+    {ok, BH} = bh1750:start(I2CBus, [{mode, Mode}]),
     case Mode of
         one_time ->
             one_time_loop(BH);
