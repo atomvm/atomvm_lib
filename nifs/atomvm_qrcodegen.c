@@ -36,10 +36,10 @@
 
 #define TAG "atomvm_qrcodegen"
 
-static const char *const low_atom =         "\x3" "low";
-static const char *const medium_atom =      "\x6" "medium";
-static const char *const quartile_atom =    "\x8" "quartile";
-static const char *const high_atom =        "\x4" "high";
+// static const char *const low_atom =         "\x3" "low";
+// static const char *const medium_atom =      "\x6" "medium";
+// static const char *const quartile_atom =    "\x8" "quartile";
+// static const char *const high_atom =        "\x4" "high";
 
 static bool is_boolean(term t)
 {
