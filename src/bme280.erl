@@ -377,10 +377,6 @@ do_take_reading(State) ->
     %%
     %% Normalize into {integer, fractional} values.
     %%
-    ?TRACE("Temperature: ~p", [Temperature]),
-    ?TRACE("Pressure: ~p", [Pressure]),
-    ?TRACE("Humidity: ~p", [Humidity]),
-    ?TRACE("-2003/100: ~p", [{-2003 div 100, -2003 rem 100}]),
     Reading = {
         normalize_reading(Temperature, TempOverSampling, 100),
         normalize_reading(Pressure, PressureOverSampling, 100),

@@ -8,7 +8,7 @@ The AtomVM ADC library is only supported on the ESP32 platform.
 
 The AtomVM ADC library is implemented as an AtomVM Nif, which includes some native C code that must be linked into the ESP32 AtomVM image.  In order to build and deploy this client code, you must build an AtomVM binary image.
 
-Instructions for building and linking an `atomvm_lib` component (Nif or Port) can be found in the (Components)[components.md] document.  Please read these instructions before proceeding.
+Instructions for building and linking an `atomvm_lib` component (Nif or Port) can be found in the [Components](components.md) document.  Please read these instructions before proceeding.
 
 The name of the ADC library Nif is `atomvm_adc`.  You should therefore edit the `component_nifs.txt` file in `src/platforms/esp32/main` so that it contains a line for the `atomvm_adc` Nif driver:
 

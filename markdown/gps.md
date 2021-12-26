@@ -15,7 +15,7 @@ The AtomVM GPS library is only supported on the ESP32 platform.
 
 The AtomVM GPS library is implemented as an AtomVM Port, which includes some native C code that must be linked into the ESP32 AtomVM image.  In order to build and deploy this client code, you must build an AtomVM binary image.
 
-Instructions for building and linking an `atomvm_lib` component (Nif or Port) can be found in the (Components)[components.md] document.  Please read these instructions before proceeding.
+Instructions for building and linking an `atomvm_lib` component (Nif or Port) can be found in the [Components](components.md) document.  Please read these instructions before proceeding.
 
 The name of the AtomVM GPS library port is `atomvm_gps`.  You should therefore edit the `component_ports.txt` file in `src/platforms/esp32/main` so that it contains a line for the AtomVM MQTT client port:
 
