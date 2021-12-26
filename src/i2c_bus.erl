@@ -23,7 +23,7 @@
 
 -behaviour(gen_server).
 
--export([start/1, stop/1, enqueue/3, write_bytes/3, write_bytes/4, read_bytes/3, read_bytes/4]).
+-export([start/1, start_link/1, stop/1, enqueue/3, write_bytes/3, write_bytes/4, read_bytes/3, read_bytes/4]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export_type([i2c_bus/0]).
 
@@ -58,6 +58,16 @@
 -spec start(Options::options()) -> {ok, i2c_bus()} | {error, Reason::term()}.
 start(Options) ->
     gen_server:start(?MODULE, maybe_add_defaults(Options), []).
+
+%%-----------------------------------------------------------------------------
+%% @param   Options
+%% @returns {ok, i2c_bus()} on success, or {error, Reason}, on failure
+%% @doc     Start the I2C Bus.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec start_link(Options::options()) -> {ok, i2c_bus()} | {error, Reason::term()}.
+start_link(Options) ->
+    gen_server:start_link(?MODULE, maybe_add_defaults(Options), []).
 
 %%-----------------------------------------------------------------------------
 %% @param       Bus a reference to the I2C Bus instance created via start
@@ -97,6 +107,7 @@ write_bytes(Bus, Address, Bytes) ->
 %% @doc
 %% @end
 %%-----------------------------------------------------------------------------
+-spec write_bytes(Bus::i2c_bus(), Address::address(), Register::register(), Bytes::binary()) -> ok | {error, Reason::term()}.
 write_bytes(Bus, Address, Register, Bytes) ->
     gen_server:call(Bus, {write_bytes, Address, Register, Bytes}).
 
@@ -106,6 +117,7 @@ write_bytes(Bus, Address, Register, Bytes) ->
 %% @doc
 %% @end
 %%-----------------------------------------------------------------------------
+-spec read_bytes(Bus::i2c_bus(), Address::address(), Count:: non_neg_integer()) -> error | binary().
 read_bytes(Bus, Address, Count) ->
     gen_server:call(Bus, {read_bytes, Address, Count}).
 
@@ -115,6 +127,7 @@ read_bytes(Bus, Address, Count) ->
 %% @doc
 %% @end
 %%-----------------------------------------------------------------------------
+-spec read_bytes(Bus::i2c_bus(), Address::address(), Register::register(), Count:: non_neg_integer()) -> error | binary().
 read_bytes(Bus, Address, Register, Count) ->
     gen_server:call(Bus, {read_bytes, Address, Register, Count}).
 
