@@ -192,6 +192,7 @@ reset(BH) ->
 
 %% @hidden
 init({I2CBus, Options}) ->
+    ?TRACE("Initializing BH1750 with I2CBus ~p and Options ~p", [I2CBus, Options]),
     Mode = normalize_mode(proplists:get_value(mode, Options, ?DEFAULT_MODE)),
     UpdateIntervalMs = proplists:get_value(update_interval_ms, Options, ?DEFAULT_UPDATE_INTERVAL_MS),
     State = #state{
@@ -204,6 +205,7 @@ init({I2CBus, Options}) ->
         mtreg = normalize_mtreg(proplists:get_value(mtreg, Options, ?DEFAULT_MTREG))
     },
     do_set_sensitivity(I2CBus, State#state.addr, State#state.mtreg),
+    ?TRACE("Initial State ~p", [State]),
     {ok, State}.
 
 %% private
@@ -242,9 +244,10 @@ normalize_mtreg(MtReg) ->
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(take_reading, _From, State) ->
+    ?TRACE("Taking reading ...", []),
     Reply = case State#state.mode of
         one_time ->
-            {ok, do_take_reading(State)};
+            do_take_reading(State);
         _ ->
             {error, badstate}
     end,
@@ -307,8 +310,13 @@ do_take_reading(State) ->
     } = State,
     ok = send_command(I2CBus, Address, get_command(one_time, Resolution)),
     timer:sleep(get_sleep_ms(Resolution, MtReg)),
-    Bin = i2c_bus:read_bytes(I2CBus, Address, 2),
-    to_reading(Bin, Mode, MtReg).
+    case i2c_bus:read_bytes(I2CBus, Address, 2) of
+        error ->
+            ?TRACE("Bad reading!", []),
+            {error, bad_reading};
+        Bin ->
+            {ok, to_reading(Bin, Mode, MtReg)}
+    end.
 
 %% @private
 to_reading(Bin, Mode, MtReg) ->
@@ -353,6 +361,7 @@ do_continuous_reading(State) ->
     to_reading(Bin, Mode, MtReg).
 
 do_set_sensitivity(I2CBus, Address, MtReg) ->
+    ?TRACE("Setting sensitivity ...", []),
     send_command(I2CBus, Address, ?BH1750_POWER_ON),
     High = (MtReg band 16#F8) bor 16#04,
     send_command(I2CBus, Address, High),
@@ -365,8 +374,9 @@ send_command(I2CBus, Address, Command) ->
     % ok = i2c_bus:begin_transmission(I2CBus, Address),
     % ok = i2c_bus:write_byte(I2CBus, Command),
     % ok = i2c_bus:end_transmission(I2CBus).
-    i2c_bus:enqueue(I2CBus, Address, [
-        fun(Port, _Address) -> i2c:write_byte(Port, Command) end
+    ?TRACE("sending command to bus ~p using address ~p command ~p ...", [I2CBus, Address, Command]),
+    ok = i2c_bus:enqueue(I2CBus, Address, [
+        fun(Port, _Address) -> ok = i2c:write_byte(Port, Command) end
     ]).
 
 %% @private
