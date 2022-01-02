@@ -195,14 +195,22 @@ do_cast_async(Lora, Payload) ->
 %%% Message handling (receive side)
 %%%
 
+do_handle_message(_State, <<"">>, _QoS) ->
+    ?TRACE("Empty payload", []),
+    empty_payload;
 do_handle_message(State, Payload, QoS) ->
     <<Magic:8, Msg/binary>> = Payload,
     MsgType = Magic band 16#F0,
     case MsgType of
         ?MSG_TYPE_NET ->
+            ?TRACE("NET msg type", []),
             handle_net_message(State, Magic band 16#0F, Msg, QoS);
         ?MSG_TYPE_APP ->
-            handle_app_message(State, Magic band 16#0F, Msg, QoS)
+            ?TRACE("APP msg type", []),
+            handle_app_message(State, Magic band 16#0F, Msg, QoS);
+        _ ->
+            ?TRACE("Unknown msg type", []),
+            unknown_msg_type
     end.
 
 handle_net_message(_State, _Encoding, _Msg, _QoS) ->
@@ -211,9 +219,11 @@ handle_net_message(_State, _Encoding, _Msg, _QoS) ->
 handle_app_message(State, Encoding, Msg, QoS) ->
     case Encoding of
         ?ERLANG_ENCODING ->
+            ?TRACE("Erlang encoding", []),
             {MsgType, Message} = binary_to_term(Msg),
             handle_application_message_type(MsgType, State, Message, QoS);
         _ ->
+            ?TRACE("Unknown encoding", []),
             unknown_encoding
     end.
 
@@ -223,14 +233,17 @@ handle_application_message_type(cast, State, {RequestId, Term}, QoS) ->
     MyName = State#state.name,
     case ToNodeName of
         MyName ->
+            ?TRACE("Cast message was intended for me ~p", [MyName]),
             case maps:get(cast_handler, State#state.config, undefined) of
                 undefined ->
+                    ?TRACE("No cast handler for ~p", [MyName]),
                     no_cast_handler;
                 CastHandler ->
                     ?TRACE("found cast handler", []),
                     CastHandler(Term, #{from => FromNodeName, qos => QoS})
             end;
         _SomeoneElse ->
+            ?TRACE("Cast message was intended for someone else", []),
             intended_for_someone_else
     end;
 handle_application_message_type(call, State, {RequestId, Term}, QoS) ->
@@ -239,8 +252,10 @@ handle_application_message_type(call, State, {RequestId, Term}, QoS) ->
     MyName = State#state.name,
     case ToNodeName of
         MyName ->
+            ?TRACE("Call message was intended for me ~p", [MyName]),
             case maps:get(call_handler, State#state.config, undefined) of
                 undefined ->
+                    ?TRACE("No call handler for ~p", [MyName]),
                     no_call_handler;
                 CallHandler ->
                     ?TRACE("found call handler", []),
@@ -251,6 +266,7 @@ handle_application_message_type(call, State, {RequestId, Term}, QoS) ->
                     lora:broadcast(State#state.lora, ReplyMessage)
             end;
         _SomeoneElse ->
+            ?TRACE("Call message was intended for someone else", []),
             intended_for_someone_else
     end;
 handle_application_message_type(reply, State, {RequestId, Reply}, QoS) ->
@@ -259,6 +275,7 @@ handle_application_message_type(reply, State, {RequestId, Reply}, QoS) ->
     MyName = State#state.name,
     case FromNodeName of
         MyName ->
+            ?TRACE("Reply message was intended for me ~p", [MyName]),
             case maps:get(RequestId, State#state.outstanding_requests, undefined) of
                 undefined ->
                     maybe_request_timed_out;
@@ -267,6 +284,7 @@ handle_application_message_type(reply, State, {RequestId, Reply}, QoS) ->
                     Pid ! {RequestId, Reply, QoS}
             end;
         _SomeoneElse ->
+            ?TRACE("Reply message was intended for someone else", []),
             ignore
     end.
 

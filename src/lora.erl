@@ -605,7 +605,7 @@ do_receive(State) ->
                 rssi => get_rssi(SPI, Frequency),
                 snr => get_snr(SPI)
             },
-            ?TRACE("Received data (len=~p): ~s; Qos: ~p", [byte_size(Data), Data, QoS]),
+            ?TRACE("Received data (len=~p): ~p; Qos: ~p", [length(Data), Data, QoS]),
 
             {ok, _} = write_register(SPI, ?REG_FIFO_ADDR_PTR, 0),
             %%
