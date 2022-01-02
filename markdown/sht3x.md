@@ -57,7 +57,7 @@ Single-shot readings are obtained via a call to the `sht3x:take_reading/0` funct
 
 Readings are represented as a tuple containing the temperature (in degrees celsius) and relative humidity, as a percentage.  Each value contains an integral and fractional part, with the fractional part expressed as a ratio.
 
-The SHT31x supports a 0.01% relative humidity resolution, and a 0.015C temperature resolution.
+The SHT31 supports a 0.01% relative humidity resolution, and a 0.015C temperature resolution.  See the [SHT3x datasheet](../assets/Sensirion_Humidity_Sensors_SHT3x_Datasheet_digital.pdf) for information about other models of this sensor.
 
 For example,
 

@@ -30,7 +30,7 @@ The `atomvm_lib` library includes the following features:
 
 * [BME280](markdown/bme280.md) (Temperature, humidity, and pressure sensor)
 * [SHT3X](markdown/sht3x.md) (Temperature and humidity sensor)
-* [DHT](markdown/DHT.md) (Temperature and humidity sensor -- not recommended, poor quality)
+* [DHT](markdown/dht.md) (Temperature and humidity sensor -- not recommended, poor quality)
 * [BH1750](markdown/bh1750.md) (Luminosity sensor)
 * [LEDC PWM](markdown/ledc_pwm.md)
 * [LoRa](markdown/lora.md) (SX127X transceiver)
