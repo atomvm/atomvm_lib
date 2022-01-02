@@ -146,8 +146,8 @@ to_decimal({N, D}, Precision) when is_integer(N) andalso is_integer(D) ->
     case simplify({N, D}) of
         {I, {N1, D1}} ->
             {I, to_decimal({N1, D1}, Precision)};
-        {N1, D} ->
-            Digits = long_division(D, N1, Precision, []),
+        {N1, D1} ->
+            Digits = long_division(D1, N1, Precision, []),
             {to_number(Digits), pow(10, Precision)};
         undefined ->
             undefined;
