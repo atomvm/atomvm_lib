@@ -208,8 +208,8 @@ handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(take_reading, _From, State) ->
     ?TRACE("Taking reading ...", []),
-    Reading = do_take_reading(State),
-    {reply, {ok, Reading}, State};
+    Reply = do_take_reading(State),
+    {reply, Reply, State};
 handle_call(soft_reset, _From, State) ->
     %% TODO fix
     %% write_byte(State#state.i2c_bus, ?SHT31_REGISTER_SOFT_RESET, 16#01)
@@ -263,8 +263,16 @@ do_take_reading(State) ->
     %%
     %% Read the data in memory.
     %%
-    Bytes = read_bytes(I2CBus, 6),
-    ?TRACE("read bytes: ~p", [Bytes]),
+    case read_bytes(I2CBus, 6) of
+        error ->
+            ?TRACE("Bad reading!", []),
+            {error, bad_reading};
+        Bytes ->
+            {ok, to_reading(Bytes)}
+    end.
+
+to_reading(Bytes) ->
+    ?TRACE("to_reading: ~p", [Bytes]),
     <<
         TempReading:16, _TempChecksum:8,
         HumidityReading:16, _Humidityksum:8
