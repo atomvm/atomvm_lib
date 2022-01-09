@@ -15,9 +15,14 @@
 // limitations under the License.
 //
 
+#ifndef __ATOMVM_GPS_H__
+#define __ATOMVM_GPS_H__
+
 #include "context.h"
 #include "globalcontext.h"
 #include "term.h"
 
 void atomvm_gps_init(GlobalContext *global);
 Context *atomvm_gps_create_port(GlobalContext *global, term opts);
+
+#endif

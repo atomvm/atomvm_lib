@@ -15,9 +15,15 @@
 // limitations under the License.
 //
 
+
+#ifndef __ATOMVM_MQTT_CLIENT_H__
+#define __ATOMVM_MQTT_CLIENT_H__
+
 #include "context.h"
 #include "globalcontext.h"
 #include "term.h"
 
 void atomvm_mqtt_client_init(GlobalContext *global);
 Context *atomvm_mqtt_client_create_port(GlobalContext *global, term opts);
+
+#endif
