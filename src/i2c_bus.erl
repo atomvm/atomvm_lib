@@ -149,8 +149,6 @@ init(Options) ->
     {ok, State}.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call({enqueue, Address, Operations}, _From, State) ->
     Reply = try_enqueue_operations(State#state.port, Address, Operations),
     {reply, Reply, State};

@@ -235,8 +235,6 @@ normalize_mode(Mode) ->
     end.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call(take_reading, _From, State) ->
     Reading = do_take_reading(State),
     {reply, {ok, Reading}, State};
@@ -258,6 +256,9 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 %% @hidden
+terminate(normal, State) ->
+    ?TRACE("terminate(normal, ~p)", [State]),
+    do_sleep(State);
 terminate(_Reason, _State) ->
     ok.
 
@@ -384,6 +385,15 @@ do_take_reading(State) ->
     },
     ?TRACE("Reading: ~p", [Reading]),
     Reading.
+
+%% @private
+do_sleep(State) ->
+    #state{
+        i2c_bus = I2CBus
+    } = State,
+    ?TRACE("Setting BME device to sleep ...", []),
+    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_HUM, 16#FF),
+    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_MEAS, 16#FF).
 
 %% @private
 normalize_reading(R, O, D) ->

@@ -204,8 +204,6 @@ init({I2CBus, Options}) ->
     }}.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call(take_reading, _From, State) ->
     ?TRACE("Taking reading ...", []),
     Reply = do_take_reading(State),

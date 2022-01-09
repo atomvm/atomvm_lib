@@ -179,8 +179,6 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call(clear, _From, #state{use_nif=true} = State) ->
     {reply, ?MODULE:nif_clear(State#state.i2c_num), State};
 % handle_call(clear, _From, State) ->

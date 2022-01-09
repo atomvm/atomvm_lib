@@ -215,7 +215,7 @@ start(Config) ->
 %%-----------------------------------------------------------------------------
 -spec stop(GPS::gps()) -> ok.
 stop(GPS) ->
-    gen_server:call(GPS, stop).
+    gen_server:stop(GPS).
 
 %%-----------------------------------------------------------------------------
 %% @param   GPS    the GPS instance created via `start/1'
@@ -290,6 +290,7 @@ handle_info(Info, State) ->
 
 %% @hidden
 terminate(Reason, State) ->
+    do_stop(State#state.port),
     io:format("gps gen_server process ~p terminated with reason ~p.  State: ~p~n", [self(), Reason, State]),
     ok.
 

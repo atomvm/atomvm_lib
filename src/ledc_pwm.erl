@@ -85,7 +85,7 @@ start() ->
 %%-----------------------------------------------------------------------------
 -spec stop() -> ok.
 stop() ->
-    gen_server:call(?SERVER_NAME, stop).
+    gen_server:stop(?SERVER_NAME).
 
 %%-----------------------------------------------------------------------------
 %% @param   FreqHz          the frequency (in hz)
@@ -221,8 +221,6 @@ init(_Args) ->
     {ok, #state{}}.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call({create_timer, Freq, Options}, _From, State) ->
     {NewState, Response} = maybe_create_timer(Freq, Options, State),
     {reply, Response, NewState};

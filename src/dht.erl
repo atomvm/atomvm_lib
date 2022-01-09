@@ -77,7 +77,7 @@ start(Config) when is_map(Config) ->
 %%-----------------------------------------------------------------------------
 -spec stop(DHT::dht()) -> ok.
 stop(DHT) ->
-    gen_server:call(DHT, stop).
+    gen_server:stop(DHT).
 
 %%-----------------------------------------------------------------------------
 %% @param   Pin         pin from which to read DHT
@@ -125,8 +125,6 @@ init(#{pin := Pin, device := Device} = _Config) ->
     {ok, #state{pin=Pin, device=Device}}.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call(take_reading, _From, State) ->
     ?TRACE("Taking a reading.", []),
     {LastMeasurmentTime, Response} = do_measure(State#state.pin, State#state.device, State#state.last_measurement),

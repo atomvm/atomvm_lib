@@ -197,7 +197,7 @@ start(Config) ->
 %%-----------------------------------------------------------------------------
 -spec stop(MQTT::mqtt()) -> ok.
 stop(MQTT) ->
-    gen_server:call(MQTT, stop).
+    gen_server:stop(MQTT).
 
 %%-----------------------------------------------------------------------------
 %% @param   MQTT    the MQTT client instance created via `start/1'
@@ -450,9 +450,6 @@ init(Config) ->
     end.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    do_stop(State#state.port),
-    {stop, normal, ok, State};
 handle_call(disconnect, _From, State) ->
     Reply = do_disconnect(State#state.port),
     {reply, Reply, State};
@@ -663,6 +660,7 @@ handle_info(Info, State) ->
 %% @hidden
 terminate(Reason, State) ->
     io:format("mqtt gen_server process ~p terminated with reason ~p.  State: ~p~n", [self(), Reason, State]),
+    do_stop(State#state.port),
     ok.
 
 %% @hidden

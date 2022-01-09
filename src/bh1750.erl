@@ -18,11 +18,12 @@
 %%-----------------------------------------------------------------------------
 %% @doc An AtomVM I2C driver for the BH1750.
 %%
-%% The BH1750 is a small sensor that can read
+%% The Rohm Semiconductor BH1750 is a small sensor that can measure ambient
+%% light in [Lux](https://en.wikipedia.org/wiki/Lux)
 %%
-%% Further information about the Bosch Sensortec BH1750 can be found in the reference
+%% Further information about the BH1750 sensor can be found in the reference
 %% documentation:
-%% https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf
+%% https://www.mouser.com/datasheet/2/348/bh1750fvi-e-186247.pdf
 %%
 %% @end
 %%-----------------------------------------------------------------------------
@@ -241,8 +242,6 @@ normalize_mtreg(MtReg) ->
     end.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call(take_reading, _From, State) ->
     ?TRACE("Taking reading ...", []),
     Reply = case State#state.mode of
@@ -253,7 +252,7 @@ handle_call(take_reading, _From, State) ->
     end,
     {reply, Reply, State};
 handle_call(reset, _From, State) ->
-    {reply, todo, State};
+    {reply, {error, unimplemented}, State};
 handle_call(Request, _From, State) ->
     {reply, {error, {unknown_request, Request}}, State}.
 
@@ -288,6 +287,9 @@ continuous_reading(State) ->
     start_tick(State).
 
 %% @hidden
+terminate(normal, State) ->
+    ?TRACE("terminate(normal, ~p)", [State]),
+    do_powerdown(State);
 terminate(_Reason, _State) ->
     ok.
 
@@ -350,6 +352,7 @@ do_start_continuous_reading(State) ->
     ok = send_command(I2CBus, Address, get_command(continuous, Resolution)),
     timer:sleep(get_sleep_ms(Resolution, MtReg)).
 
+%% @private
 do_continuous_reading(State) ->
     #state{
         i2c_bus = I2CBus,
@@ -360,6 +363,7 @@ do_continuous_reading(State) ->
     Bin = i2c_bus:read_bytes(I2CBus, Address, 2),
     to_reading(Bin, Mode, MtReg).
 
+%% @private
 do_set_sensitivity(I2CBus, Address, MtReg) ->
     ?TRACE("Setting sensitivity ...", []),
     send_command(I2CBus, Address, ?BH1750_POWER_ON),
@@ -367,6 +371,15 @@ do_set_sensitivity(I2CBus, Address, MtReg) ->
     send_command(I2CBus, Address, High),
     Low = 16#60 bor (MtReg band 16#1F),
     send_command(I2CBus, Address, Low),
+    send_command(I2CBus, Address, ?BH1750_POWER_DOWN).
+
+%% @private
+do_powerdown(State) ->
+    #state{
+        i2c_bus = I2CBus,
+        addr = Address
+    } = State,
+    ?TRACE("Setting BH1750 device to sleep ...", []),
     send_command(I2CBus, Address, ?BH1750_POWER_DOWN).
 
 %% @private

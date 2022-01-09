@@ -95,7 +95,7 @@ start(Pin, Options) ->
 %%-----------------------------------------------------------------------------
 -spec stop(ADC::adc()) -> ok.
 stop(ADC) ->
-    gen_server:call(ADC, stop).
+    gen_server:stop(ADC).
 
 %%-----------------------------------------------------------------------------
 %% @param   Pin         pin from which to read ADC
@@ -158,8 +158,6 @@ init([Pin, Options]) ->
     }}.
 
 %% @hidden
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
 handle_call({read, ReadOptions}, _From, State) ->
     Reading = adc:take_reading(State#state.pin, ReadOptions, State#state.bit_width, State#state.attenuation),
     {reply, {ok, Reading}, State};
