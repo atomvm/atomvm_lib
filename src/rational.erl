@@ -142,6 +142,8 @@ gcd(A, B) ->
 %% and that in general the returned fraction is an estimate.
 %%
 -spec to_decimal(F::fraction(), P::non_neg_integer()) -> rational().
+to_decimal(N, Precision) when is_integer(N) ->
+    {N, {0, pow(10, Precision)}};
 to_decimal({N, D}, Precision) when is_integer(N) andalso is_integer(D) ->
     case simplify({N, D}) of
         {I, {N1, D1}} ->
