@@ -317,6 +317,7 @@ do_take_reading(State) ->
             ?TRACE("Bad reading!", []),
             {error, bad_reading};
         Bin ->
+            ?TRACE("Got reading: ~p", [Bin]),
             {ok, to_reading(Bin, Mode, MtReg)}
     end.
 
@@ -337,7 +338,7 @@ multiply(A, B) ->
 
 %% @private
 divide(0, _B) ->
-    0;
+    {0, {0, 1}};
 divide(A, B) ->
     rational:to_decimal(rational:reduce(rational:divide(A, B)), 2).
 
