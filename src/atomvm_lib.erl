@@ -16,7 +16,7 @@
 %%
 -module(atomvm_lib).
 
--export([set_rtc_memory/1, get_rtc_memory/0, random/2, sleep_forever/0]).
+-export([set_rtc_memory/1, get_rtc_memory/0, random/2, sleep_forever/0, to_hex/2, to_hex/1]).
 
 %%-----------------------------------------------------------------------------
 %% @param   Data binary data to store
@@ -76,3 +76,56 @@ random(_,_) ->
 sleep_forever() ->
     timer:sleep(24*60*60*1000),
     sleep_forever().
+
+
+%%-----------------------------------------------------------------------------
+%% @returns hex representation of I, as a string.
+%% @doc     Returns the hex representation of I, as a string.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec to_hex(I::integer()|binary()) -> string().
+to_hex(I) when is_integer(I) ->
+    to_hex(I, 1);
+to_hex(B) when is_binary(B) ->
+    lists:flatten([ "0x" ++ to_hex(I) ++ "," || I <- erlang:binary_to_list(B)]).
+
+
+%%-----------------------------------------------------------------------------
+%% @returns hex representation of I, as a string.
+%% @doc     Returns the hex representation of I, as a string.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec to_hex(I::integer, Bytes::non_neg_integer()) -> string().
+to_hex(I, Bytes) when is_integer(I) ->
+    to_hex(I, Bytes * 2, []).
+
+%% @private
+to_hex(0, K, Accum) ->
+    maybe_pad(K, Accum);
+to_hex(I, K, Accum) ->
+    Quartet = I band 16#F,
+    to_hex(I bsr 4, K - 1, [hex_char(Quartet) | Accum]).
+
+%% @private
+maybe_pad(0, Accum) ->
+    Accum;
+maybe_pad(K, Accum) ->
+    maybe_pad(K - 1, [$0 | Accum]).
+
+%% @private
+hex_char(16#0) -> $0;
+hex_char(16#1) -> $1;
+hex_char(16#2) -> $2;
+hex_char(16#3) -> $3;
+hex_char(16#4) -> $4;
+hex_char(16#5) -> $5;
+hex_char(16#6) -> $6;
+hex_char(16#7) -> $7;
+hex_char(16#8) -> $8;
+hex_char(16#9) -> $9;
+hex_char(16#A) -> $A;
+hex_char(16#B) -> $B;
+hex_char(16#C) -> $C;
+hex_char(16#D) -> $D;
+hex_char(16#E) -> $E;
+hex_char(16#F) -> $F.

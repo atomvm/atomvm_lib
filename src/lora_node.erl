@@ -16,7 +16,7 @@
 %%
 -module(lora_node).
 
--export([start/2, call/3, cast/3, multicast/2, get_lora/1]).
+-export([start/2, call/3, call/4, cast/3, multicast/2, get_lora/1]).
 
 %% gen_server
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2]).
@@ -25,6 +25,8 @@
 
 % -define(TRACE_ENABLED, true).
 -include_lib("atomvm_lib/include/trace.hrl").
+
+-define(DEFAULT_TIMEOUT_MS, 15000).
 
 start(Name, Config) ->
     gen_server:start(?MODULE, {Name, Config}, []).
@@ -37,7 +39,12 @@ multicast(LauraNode, Term) ->
     gen_server:cast(LauraNode, {multicast, Term}).
 
 call(LoraNode, ToNodeName, Term) ->
-    gen_server:call(LoraNode, {call, ToNodeName, Term}).
+    call(LoraNode, ToNodeName, Term, undefined).
+
+call(LoraNode, ToNodeName, Term, undefined) ->
+    gen_server:call(LoraNode, {call, ToNodeName, Term, undefined}, ?DEFAULT_TIMEOUT_MS);
+call(LoraNode, ToNodeName, Term, TimeoutMs) ->
+    gen_server:call(LoraNode, {call, ToNodeName, Term, TimeoutMs}, TimeoutMs).
 
 get_lora(LoraNode) ->
     gen_server:call(LoraNode, get_lora).
@@ -81,9 +88,9 @@ handle_cast(Message, State) ->
     {noreply, State}.
 
 %% @hidden
-handle_call({call, ToNodeName, Term}, From, State) ->
-    ?TRACE("handle_call: {call, ~p, ~p}", [ToNodeName, Term]),
-    NewState = do_call(State, From, ToNodeName, Term),
+handle_call({call, ToNodeName, Term, TimeoutMs}, From, State) ->
+    ?TRACE("handle_call: {call, ~p, ~p, ~p}", [ToNodeName, Term, TimeoutMs]),
+    NewState = do_call(State, From, ToNodeName, Term, TimeoutMs),
     {noreply, NewState};
 % handle_call({multicast, Term}, From, State) ->
 %     ?TRACE("handle_multicast: {multicast, ~p}", [Term]),
@@ -137,13 +144,13 @@ terminate(_Reason, _State) ->
 %%%   msg    encoding
 %%%   type
 
-do_call(State, From, ToNodeName, Term) ->
+do_call(State, From, ToNodeName, Term, TimeoutMs) ->
     N = State#state.n,
     RequestId = create_request_id(State#state.name, ToNodeName),
     Payload = create_lora_call_message(RequestId, Term),
     Self = self(),
-    TimeoutMs = maps:get(timeout_ms, State#state.config, 5000),
-    Pid = spawn(fun() -> do_call_async(Self, TimeoutMs, State#state.lora, RequestId, Payload, From) end),
+    ActualTimeoutMs = case TimeoutMs of undefined -> maps:get(timeout_ms, State#state.config, ?DEFAULT_TIMEOUT_MS); _ -> TimeoutMs end,
+    Pid = spawn(fun() -> do_call_async(Self, ActualTimeoutMs, State#state.lora, RequestId, Payload, From) end),
     OutstandingRequests = State#state.outstanding_requests,
     State#state{outstanding_requests=OutstandingRequests#{RequestId => Pid}, n=N+1}.
 

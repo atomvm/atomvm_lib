@@ -1,13 +1,33 @@
+# AtomVMLib LoRa Drivers
 
-# LoRa (SX127X) Driver
+The `atomvm_lib` LoRa drivers provides support for integrating [LoRa](https://en.wikipedia.org/wiki/LoRa) modules with [AtomVM](https://github.com/atomvm/AtomVM) applications running on the [ESP32](https://www.espressif.com/en/products/socs/esp32) devices.  LoRa provides and alternative to the built-in WiFi and Bluetooth radios on-board the ESP32 and is generally better for battery powered applications that are out of range of typical WiFi access points.
 
-The SemTech [SX127X](../assets/DS_SX1276-7-8-9_W_APP_V7.pdf) is a compact wireless [LoRa](https://en.wikipedia.org/wiki/LoRa) modem, capable of low-power wireless communication over long distances for IoT applications.  The SX127X integrated circuit can be integrated directly into your circuit designs, but is more typically supplied via a module for integration with your projects.
+Currently, the following two LoRa modules are supported:
 
-The `atomvm_lib` LoRa driver provides support for integrating the SX127X chipset with [AtomVM](https://github.com/bettio/AtomVM) applications running on the [ESP32](https://www.espressif.com/en/products/socs/esp32) devices.  LoRa provides and alternative to the built-in WiFi and Bluetooth radios on-board the ESP32 and is generally more useful for battery powered applications that are out of range of typical WiFi access points.
+* SemTech [SX127x](../assets/DS_SX1276-7-8-9_W_APP_V7.pdf)
+* SemTech [SX126x](../assets/DS_SX1261-2_V1.2.pdf)
 
-> Note.  Testing has primarily utilized SX127X modules, such as the [NiceRF LoRa 1276](../assets/LoRa1276_datasheet.pdf).
+The drivers for these LoRa modules are described below in more detail.
 
-The SX127X supports the 4-pin SPI interface, and the `atomvm_lib` LoRa driver makes use of this interface to communicate with the SX127X modem to send and receive data.  Users may select any supported SPI GPIO pins on your device to integrate with the modem.  Additional pins for the SX127X `dpio_0` (for receive) and `reset` pins may also be used.
+# LoRa (SX127x) Driver
+
+The SemTech [SX127x](../assets/DS_SX1276-7-8-9_W_APP_V7.pdf) is a compact wireless [LoRa](https://en.wikipedia.org/wiki/LoRa) modem, capable of low-power wireless communication over long distances for IoT applications.  The SX127x integrated circuit can be integrated directly into your circuit designs, but is more typically supplied via a module for integration with your projects.
+
+The SX127X supports the 4-pin SPI interface, and the `atomvm_lib` LoRa driver makes use of this interface to communicate with the SX127X modem to send and receive data.  Users may select any supported SPI GPIO pins on your device to integrate with the modem.  Additional pins for the SX127x `dpio_0` (Interrupt for receive) and `reset` pins may also be used.  See the [Configuration](#Configuration) section below, for more information.
+
+The `atomvm_lib` SX127x LoRa driver requires that the SPI `address_len_bits` device config be set to `8`.
+
+> Note.  Testing has primarily utilized SX127x modules, such as the [NiceRF LoRa 1276](../assets/LoRa127X_100mW_LoRa_Wireless_Transceiver_Module_V3.0.pdf).
+
+# LoRa (SX126x) Driver
+
+The SemTech SemTech [SX126x](../assets/DS_SX1261-2_V1.2.pdf) is a compact wireless [LoRa](https://en.wikipedia.org/wiki/LoRa) modem, capable of low-power wireless communication over long distances for IoT applications.  The SX126x integrated circuit can be integrated directly into your circuit designs, but is more typically supplied via a module for integration with your projects.
+
+The SX126x supports the 4-pin SPI interface, and the `atomvm_lib` LoRa driver makes use of this interface to communicate with the SX127X modem to send and receive data.  Users may select any supported SPI GPIO pins on your device to integrate with the modem.  Additional pins for the SX126x `dpio_1` (IRQ for receive), `busy`, and `reset` pins may also be used.  See the [Configuration](#Configuration) section below, for more information.
+
+The `atomvm_lib` SX126x LoRa driver requires that the SPI `address_len_bits` device config be set to `0`.
+
+> Note.  Testing has primarily utilized SX126x modules, such as the [NiceRF LoRa 1262](../assets/LoRa126X_160mW_Low_Power_Consumption_Wireless_Transceiver_Module_V2.1.pdf).
 
 # Programming Manual
 
@@ -22,21 +42,25 @@ The SPI AtomVM port must be instantiated separately from the LoRa driver, as use
 For example, to configure the 4-wire SPI interface to use the ESP32 HSPI IOMUX pins, you can use the following configuration:
 
     %% erlang
-    SPIConfig = [
-        {bus_config, [
-            {miso_io_num, 12},
-            {mosi_io_num, 13},
-            {sclk_io_num, 14}
-        ]},
-        {device_config, [
-            {spi_clock_hz, 1000000},
-            {spi_mode, 0},
-            {spi_cs_io_num, 18},
-            {address_len_bits, 8}
-        ]}
-    ],
+    SPIConfig = #{
+        bus_config => #{
+            miso_io_num => 19,
+            mosi_io_num => 27,
+            sclk_io_num => 5
+        },
+        device_config => #{
+            my_sx127x => #{
+                spi_cs_io_num => 18,
+                spi_clock_hz => 1000000,
+                address_len_bits => 8,
+                mode => 0
+            }
+        }
+    },
     SPI = spi:open(SPIConfig),
     ...
+
+> IMPORTANT. The SX127x driver requires that the SPI `address_len_bits` device config be set to `8`.  For the SX126x module, set the `address_len_bits` device config to `0`.
 
 The SPI instance can now be used to start the `atomvm_lib` LoRa driver.
 
@@ -46,12 +70,13 @@ In addition to an SPI instance, the driver is initialized with a map, containing
 
     %% erlang
     LoraConfig = #{
+        spi => spi,
         frequency => freq_915mhz,
         bandwidth => bw_125khz,
-        dio_0 => 26,
+        irq => 26,
         receive_handler => fun handle_receive/3
     },
-    {ok, Lora} = lora:start(SPI, LoraConfig),
+    {ok, Lora} = lora:start(LoraConfig),
     ...
 
 For more information about the LoRa configuration, see the [Configuration](#Configuration) section, below.
@@ -79,9 +104,10 @@ The `atomvm_lib` LoRa driver is initialized with a map containing keys and value
 | `lna_gain` | `lna_1 \| lna_2 \| lna_3 \| lna_4 \| lna_5 \| lna_6 \| auto` | no  | `auto` | Low Noise Amplifier gain control.  This setting adjusts the sensitivity of the SX127X receiver.  `lna_1` is maximum gain, and `lan_6` is minimum gain.  Most applications use the `auto` gain feature of the SX127X. |
 | `enable_crc` | `true \| false` | no  | `true` | TODO. |
 | `invert_iq` | `true \| false` | no  | `false` | TODO. |
-| `dio_0` | `non_neg_integer()` | yes, if receiving messages |  | ESP32 Pin used to signal receipt of a message.  This pin should be connected to the DIO_0 pin on the LoRa modem.  See [Receiving Data](#Receiving_Data) below for more information. |
+| `irq` | `non_neg_integer()` | yes, if receiving messages |  | ESP32 Pin used to signal receipt of a message.  This pin should be connected to the DIO_0 pin on the LoRa modem.  See [Receiving Data](#Receiving_Data) below for more information. |
 | `receive_handler` | `fun(Lora::pid(), Message::term(), QoS::qos()) -> any().` | likely, if receiving messages |  | Callback function that is invoked when a message is received.  See [Receiving Data](#Receiving_Data) below for more information. |
 | `reset` | `non_neg_integer()` | no |  | ESP32 Pin used to reset the modem on initialization.  Resetting the pin may be desireable in cases where the modem contains stale information that needs to be reset on a regular basis. |
+| `busy` | `non_neg_integer()` | no |  | ESP32 Pin used to signal whether the SX126x module is busy and whether the driver should wait before sending an SPI command.  Use of this pin is optional but recommended. |
 
 ### Choosing LoRa parameters
 
@@ -112,7 +138,7 @@ Messages are received asynchronously in the `atomvm_lib` LoRa driver and can be 
 In order to receive messages, however, you must specify the pin on the ESP32 that is connected to the `dio_0` pin on the LoRa modem, as the arrival of a message will trigger an interrupt when the `dio_0` pin is rising.  E.g, in the driver configuration map, you might have an entry like:
 
     %% erlang
-    dio_0 => 26
+    irq => 26
 
 In addition, you should specify a 3-ary callback function, which will be called when a packet arrives.  This function is specified in the configuration map using the `receive_handler` key, e.g.,
 
@@ -127,8 +153,18 @@ This function takes three parameters:
 
 For example, this handler simply prints the received packet and quality of service to the console:
 
+    %% erlang
     handle_receive(_Lora, Packet, QoS) ->
         io:format("Received Packet: ~p; QoS: ~p~n", [Packet, QoS]).
+
+## Putting the device to sleep
+
+For low power applications, it may be useful to put the modem into sleep mode when application puts the MCU to sleep.  Doing so can greatly enhance battery life.
+
+    %% erlang
+    ...
+    lora:sleep(Lora),
+    ...
 
 # LoRa Example
 

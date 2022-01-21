@@ -20,7 +20,7 @@
 
 start() ->
     LoraNodeConfig = #{
-        lora => config:lora_config(),
+        lora => config:lora_config(sx127x),
         call_handler => fun handle_call/2
     },
     {ok, _LoraNode} = lora_node:start(robert, LoraNodeConfig),

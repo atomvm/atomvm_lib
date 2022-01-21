@@ -20,7 +20,7 @@
 
 start() ->
     LoraNodeConfig = #{
-        lora => config:lora_config()
+        lora => config:lora_config(sx126x)
     },
     {ok, LoraNode} = lora_node:start(joe, LoraNodeConfig),
     io:format("Lora started.  Sending hello to robert...~n"),

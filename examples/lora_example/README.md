@@ -2,20 +2,20 @@
 
 Welcome to the `lora_example` AtomVM application(s).
 
-This example application illustrates use of the Lora interface to send and receive messages between two ESP32 devices, each of which should be connected to a LoRa transceiver.
+This example application illustrates use of the Lora interface to send and receive messages between two ESP32 devices, each of which should be connected to a LoRa transceiver.  Currently, the SemTech SX127x and SX126x devices are supported.
 
 For this application, you will need:
 
-* Two LoRa transceivers;
+* Two LoRa transceivers (Semtech SX127x or SX126x);
 * Two ESP32 devices, flashed with the [AtomVM](https://github.com/bettio/AtomVM) image (including the VM and core libraries), and capable of connecting via UART to your development machine;
 * The [`esptool.py`](https://github.com/espressif/esptool) tool (for flashing);
 * The [`git`](https://git-scm.com) version control tool;
-* [Erlang/OTP 21](https://www.erlang.org) or higher, along with [`rebar3`](https://www.rebar3.org);
+* [Erlang/OTP](https://www.erlang.org) 21, 22, or 23, along with [`rebar3`](https://www.rebar3.org);
 * A serial monitor program of your choice (e.g, [`minicom`](https://en.wikipedia.org/wiki/Minicom))
 
 While the [IDF SDK](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/) and required tool-chains are not required, they may make life a little easier.
 
-> Note.  These instructions assume you have flashed the AtomVM virtual machine and Erlang libraries to your ESP32 device.  For information about flashing ESP32 devices with the AtomVM virtual machine and libraries, consult the AtomVM documentation.
+> Note.  These instructions assume you have flashed the AtomVM virtual machine and Erlang libraries to your ESP32 device.  For information about flashing ESP32 devices with the AtomVM virtual machine and libraries, consult the [AtomVM documentation](https://doc.atomvm.net).
 
 ## Getting Started
 
@@ -118,7 +118,7 @@ Let's build and flash the LoRa sender application on to the other one of your ES
 We will first create a pruned packbeam file, with the `lora_sender` as the entry-point into the application (don't forget to clean the build first):
 
     shell$ rebar3 clean
-    shell$ rebar3 packbeam --prune --start lora_sender
+    shell$ rebar3 packbeam --force --prune --start lora_sender
     ...
     ===> Verifying dependencies...
     ===> Analyzing applications...

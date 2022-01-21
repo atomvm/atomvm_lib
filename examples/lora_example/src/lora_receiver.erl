@@ -19,37 +19,10 @@
 -export([start/0]).
 
 start() ->
-    SPIConfig = [
-        {bus_config, [
-            {miso_io_num, 15},
-            {mosi_io_num, 13},
-            {sclk_io_num, 14}
-        ]},
-        {device_config, [
-            {spi_clock_hz, 1000000},
-            {spi_mode, 0},
-            {spi_cs_io_num, 18},
-            {address_len_bits, 8}
-        ]}
-    ],
-    SPI = spi:open(SPIConfig),
-    LoraConfig = #{
-        spi => SPI,
-        frequency => freq_915mhz,
-        bandwidth => bw_125khz,
-        dio_0 => 26,
-        receive_handler => fun handle_receive/3
-    },
-    {ok, _Lora} = lora:start(LoraConfig),
+    LoraConfig = config:lora_config(sx127x),
+    {ok, _Lora} = lora:start(LoraConfig#{receive_handler => fun handle_receive/3}),
     io:format("Lora started.  Waiting to receive messages...~n"),
-    loop_forever().
+    timer:sleep(infinity).
 
 handle_receive(_Lora, Packet, QoS) ->
     io:format("Received Packet: ~p; QoS: ~p~n", [Packet, QoS]).
-
-loop_forever() ->
-    receive
-        halt -> ok
-    after 100000 ->
-        loop_forever()
-    end.

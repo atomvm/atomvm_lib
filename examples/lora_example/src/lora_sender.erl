@@ -19,38 +19,23 @@
 -export([start/0]).
 
 start() ->
-    SPIConfig = [
-        {bus_config, [
-            {miso_io_num, 15},
-            {mosi_io_num, 13},
-            {sclk_io_num, 14}
-        ]},
-        {device_config, [
-            {spi_clock_hz, 1000000},
-            {spi_mode, 0},
-            {spi_cs_io_num, 18},
-            {address_len_bits, 8}
-        ]}
-    ],
-    SPI = spi:open(SPIConfig),
-    LoraConfig = #{
-        spi => SPI,
-        frequency => freq_915mhz,
-        bandwidth => bw_125khz
-        % , spreading_factor => 10
-        % , tx_power => 15
-    },
+    LoraConfig = config:lora_config(sx126x),
     {ok, Lora} = lora:start(LoraConfig),
     io:format("Lora started.  Sending messages...~n"),
     loop(Lora, 0).
 
 loop(Lora, I) ->
     Payload = [<<"AtomVM ">>, integer_to_list(I)],
-    case lora:broadcast(Lora, Payload) of
-        ok ->
-            io:format("Sent ~p~n", [Payload]),
-            timer:sleep(10000);
-        Error ->
-            io:format("Error sending: ~p~n", [Error])
+    try
+        case lora:broadcast(Lora, Payload) of
+            ok ->
+                io:format("Sent ~p~n", [Payload]);
+            Error ->
+                io:format("Error sending: ~p~n", [Error])
+        end
+    catch
+        exit:timeout ->
+            io:format("Timed out broadcasting ~p~n", [Payload])
     end,
+    timer:sleep(10000),
     loop(Lora, I + 1).
