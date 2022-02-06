@@ -20,7 +20,7 @@
 
 spi_config() -> [
     {bus_config, [
-        {miso_io_num, 12},
+        {miso_io_num, 15},
         {mosi_io_num, 13},
         {sclk_io_num, 14}
     ]},
