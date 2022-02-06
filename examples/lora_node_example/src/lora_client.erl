@@ -28,7 +28,6 @@ start() ->
 
 loop(LoraNode, I) ->
     try
-        erlang:garbage_collect(),
         io:format("Calling robert with message {hello, ~p} ... ", [I]),
         case lora_node:call(LoraNode, robert, {hello, I}) of
             {hello, Who} ->

@@ -98,7 +98,6 @@ handle_call(Request, _From, State) ->
 %% @hidden
 handle_info({lora_receive, _Lora, Message, QoS}, State) ->
     ?TRACE("handle_info: {lora_receive, _Lora, ~p, _QoS}", [Message]),
-    erlang:garbage_collect(),
     % diag:print_proc_infos(),
     try
         do_handle_message(State, Message, QoS)
