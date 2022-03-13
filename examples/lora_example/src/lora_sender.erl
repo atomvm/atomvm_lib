@@ -49,7 +49,7 @@ loop(Lora, I) ->
     case lora:broadcast(Lora, Payload) of
         ok ->
             io:format("Sent ~p~n", [Payload]),
-            timer:sleep(1000);
+            timer:sleep(10000);
         Error ->
             io:format("Error sending: ~p~n", [Error])
     end,

@@ -214,7 +214,7 @@ handle_cast(Message, State) ->
 
 %% @hidden
 handle_call({broadcast, Message}, _From, State) ->
-    Reply = do_broadcast(State#state.spi, Message),
+    Reply = do_broadcast(State#state.spi, erlang:iolist_to_binary(Message)),
     set_mode(State#state.spi, recv),
     {reply, Reply, State};
 handle_call(dump_registers, _From, State) ->
