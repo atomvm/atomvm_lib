@@ -16,7 +16,7 @@
 %%
 
 -ifdef(TRACE_ENABLED).
--define(TRACE(Format, Args), io:format("~p [~p:~p/~p:~p] " ++  Format ++ "~n", [erlang:system_time(millisecond), ?MODULE, ?FUNCTION_NAME, ?FUNCTION_ARITY, ?LINE | Args])).
+-define(TRACE(Format, Args), io:format("~p ~p [~p:~p/~p:~p] " ++  Format ++ "~n", [erlang:system_time(millisecond), self(), ?MODULE, ?FUNCTION_NAME, ?FUNCTION_ARITY, ?LINE | Args])).
 -else.
 -define(TRACE(Format, Args), ok).
 -endif.

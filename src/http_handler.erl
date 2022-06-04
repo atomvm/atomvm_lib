@@ -15,8 +15,23 @@
 %% limitations under the License.
 %%
 
--define(INTERNAL_SERVER_ERROR, 500).
--define(BAD_REQUEST, 400).
--define(NOT_FOUND, 404).
--define(OK, 200).
--define(SWITCHING_PROTOCOLS, 101).
+%%
+%% @doc This module defined the `handle_http_req/4' callback function.
+%%
+%% The `handle_http_req/4' callback function is used to implment HTTP handlers for the `httpd' module.
+%% @end
+%%
+
+-module(http_handler).
+
+%%
+%%
+%%
+-callback handle_http_req(Method :: atom(), PathSuffix :: list(), HttpRequest :: term(), HandlerConfig :: map()) ->
+    ok |
+    {ok, Reply :: term()} |
+    {ok, ContentType :: string(), Reply :: term()} |
+    not_found |
+    bad_request |
+    internal_server_error |
+    term().

@@ -1,0 +1,191 @@
+<!--
+----------------------------------------------------------------------------
+"THE BEER-WARE LICENSE" (Revision 42):
+<fred@dushin.net> wrote this file.  You are hereby granted permission to
+copy, modify, or mutilate this file without restriction.  If you create a
+work derived from this file, you may optionally include a copy of this notice,
+for which I would be most grateful, but you are not required to do so.
+If we meet some day, and you think this stuff is worth it, you can buy me a
+beer in return.   Fred Dushin
+----------------------------------------------------------------------------
+-->
+<!DOCTYPE html>
+<html>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!-- <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> -->
+	<link rel="stylesheet" href="w3.css">
+	<head>
+		<title>AtomVM Web Console</title>
+		<style>
+			#loader {
+				position: absolute;
+				left: 50%;
+				top: 50%;
+				z-index: 1;
+				width: 100px;
+				height: 100px;
+				margin: -75px 0 0 -75px;
+				border: 16px solid #f3f3f3;
+				border-radius: 50%;
+				border-top: 16px solid #3498db;
+				width: 120px;
+				height: 120px;
+				-webkit-animation: spin 2s ease infinite;
+				animation: spin 2s ease infinite;
+			}
+			@-webkit-keyframes spin {
+				0% { -webkit-transform: rotate(0deg); }
+				100% { -webkit-transform: rotate(360deg); }
+			}
+			@keyframes spin {
+				0% { transform: rotate(0deg); }
+				100% { transform: rotate(360deg); }
+			}
+			.animate-bottom {
+				position: relative;
+				-webkit-animation-name: animatebottom;
+				-webkit-animation-duration: 1s;
+				animation-name: animatebottom;
+				animation-duration: 1s
+			}
+			@-webkit-keyframes animatebottom {
+				from { bottom:-100px; opacity:0 }
+				to { bottom:0px; opacity:1 }
+			}
+			@keyframes animatebottom {
+				from{ bottom:-100px; opacity:0 }
+				to{ bottom:0; opacity:1 }
+			}
+			#content {
+				display: none;
+			}
+			#icon {
+				text-align: right;
+				padding: 5;
+  				margin-top: 5px;
+  				margin-right: 5px;
+  			}
+		</style>
+	</head>
+	<body onload="timedShowContents()">
+		<div id="loader"></div>
+		<div id="content" class="w3-panel animate-bottom" style="display:none;">
+			<div id="tabs" class="w3-container" style="min-height:600px">
+
+				<div class="w3-bar w3-blue-gray">
+					<button class="w3-bar-item w3-button" onclick="openPanel(event, 'about')">About</button>
+					<button class="w3-bar-item w3-button" onclick="openPanel(event, 'system')">System</button>
+					<button class="w3-bar-item w3-button" onclick="openPanel(event, 'memory')">Memory</button>
+					<div id="icon"><img src="favicon.ico" alt="AtomVM logo" width="30" height="30" /></div>
+				</div>
+
+				<div id="about" class="w3-panel w3-animate-opacity wc-panel">
+					<div id="about-view">
+						Welcome to the AtomVM web console.
+
+						Use this console to explore the current state of your device.
+						<!-- <img src="AVM-logo.png" alt="AtomVM logo" width="300" height="300"/> -->
+					</div>
+				</div>
+				<div id="system" class="w3-panel w3-animate-opacity wc-panel" style="display:none">
+					<div id="system-view" class="wlan">
+						<script type="text/template" id="system-tmpl">
+							<table class="w3-table-all w3-card-4">
+								<tr><td>platform</td><td><%= platform %></td></tr>
+								<tr><td>system_architecture</td><td><%= system_architecture %></td></tr>
+								<tr><td>word_size</td><td><%= word_size %></td></tr>
+								<tr><td>chip_model</td><td><%= chip_model %></td></tr>
+								<tr><td>chip_cores</td><td><%= chip_cores %></td></tr>
+								<tr><td>chip_features</td><td><%= chip_features %></td></tr>
+								<tr><td>chip_revision</td><td><%= chip_revision %></td></tr>
+								<tr><td>atomvm_version</td><td><%= atomvm_version %></td></tr>
+								<tr><td>esp_idf_version</td><td><%= esp_idf_version %></td></tr>
+							</table>
+						</script>
+					</div>
+				</div>
+				<div id="memory" class="w3-panel w3-animate-opacity wc-panel" style="display:none">
+					<div id="memory-view" class="wlan">
+						<script type="text/template" id="memory-tmpl">
+							<table class="w3-table-all w3-card-4">
+								<tr><td>atom_count</td><td><%= atom_count %></td></tr>
+								<tr><td>port_count</td><td><%= port_count %></td></tr>
+								<tr><td>process_count</td><td><%= process_count %></td></tr>
+								<tr><td>esp32_free_heap_size</td><td><%= esp32_free_heap_size %></td></tr>
+								<tr><td>esp32_largest_free_block</td><td><%= esp32_largest_free_block %></td></tr>
+								<tr><td>esp32_minimum_free_size</td><td><%= esp32_minimum_free_size %></td></tr>
+							</table>
+						</script>
+					</div>
+				</div>
+			</div>
+			<div id="footer" class="w3-row w3-teal">
+				<div class="w3-container w3-threequarter">
+					AtomVM Web Console
+				</div>
+				<div class="w3-container w3-quarter">
+					<!-- <strong>version:</strong> <em>master</em> -->
+				</div>
+			</div>
+		</div>
+
+		<script>
+			function openPanel(evt, panelName) {
+				var i;
+				var x = document.getElementsByClassName("wc-panel");
+				for (i = 0; i < x.length; i++) {
+					x[i].style.display = "none";
+				}
+				tablinks = document.getElementsByClassName("w3-bar-item");
+					for (i = 0; i < x.length; i++) {
+						tablinks[i].className = tablinks[i].className.replace(" w3-black", "");
+				}
+				document.getElementById(panelName).style.display = "block";
+				evt.currentTarget.className += " w3-black";
+			}
+			function timedShowContents() {
+				setTimeout(showContents, 1000);
+			}
+			function showContents() {
+				document.getElementById("loader").style.display = "none";
+				document.getElementById("content").style.display = "block";
+			}
+			function openApConfigModal(){
+				/*
+				var activeCheckbox = document.getElementById('ap-config-active');
+				activeCheckbox.checked = true; //ap_config_model.get('')
+				var hiddenCheckbox = document.getElementById('ap-config-hidden');
+				hiddenCheckbox.checked = ap_config_model.get('hidden')
+				var authModeSelection = document.getElementById('ap-config-authmode');
+				authModeSelection.value = ap_config_model.get('authmode')
+				var essidTextField = document.getElementById('ap-config-essid');
+				essidTextField.value = ap_config_model.get('essid')
+				var passwordField = document.getElementById('ap-config-password');
+				passwordField.value = ""
+				var retypePasswordField = document.getElementById('ap-config-retype-password');
+				retypePasswordField.value = ""
+				*/
+				ap_config_modal_view.model = ap_config_model.clone();
+				ap_config_modal_view.render();
+				document.getElementById('ap-config-modal').style.display='block';
+			}
+			function closeApConfigModal(){
+				document.getElementById('ap-config-modal').style.display='none'
+			}
+			function saveApConfig(){
+				this.closeApConfigModal()
+			}
+		</script>
+
+		<script src="js/lib/jquery-3.1.1-min.js"></script>
+		<script src="js/lib/underscore-1.8.3-min.js"></script>
+		<script src="js/lib/backbone-1.3.3-min.js"></script>
+
+		<!-- <script src="https://code.jquery.com/jquery-3.1.1.js"></script>
+		<script src="http://underscorejs.org/underscore-min.js"></script>
+		<script src="http://backbonejs.org/backbone.js"></script> -->
+
+		<script src="js/app.js"></script>
+	</body>
+</html>

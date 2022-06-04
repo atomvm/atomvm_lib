@@ -27,6 +27,7 @@
 #include <term.h>
 #include <memory.h>
 #include <esp_system.h>
+#include <mbedtls/sha1.h>
 
 //#define ENABLE_TRACE
 #include "trace.h"
@@ -85,6 +86,27 @@ static term nif_get_mac(Context *ctx, int argc, term argv[])
     return term_from_literal_binary(buf, 2 * MAC_LENGTH, ctx);
 }
 
+#define SHA1_LEN 20
+
+static term nif_sha1(Context *ctx, int argc, term argv[])
+{
+    UNUSED(argc);
+    term binary = argv[0];
+    VALIDATE_VALUE(binary, term_is_binary);
+
+    if (UNLIKELY(memory_ensure_free(ctx, term_binary_data_size_in_terms(SHA1_LEN) + BINARY_HEADER_SIZE) != MEMORY_GC_OK)) {
+        RAISE_ERROR(OUT_OF_MEMORY_ATOM);
+    }
+    term ret = term_create_uninitialized_binary(SHA1_LEN, ctx);
+
+    int res = mbedtls_sha1_ret((const unsigned char *) term_binary_data(binary), term_binary_size(binary), (unsigned char *) term_binary_data(ret));
+    if (res != 0) {
+        RAISE_ERROR(BADARG_ATOM);
+    }
+
+    return ret;
+}
+
 
 static const struct Nif set_rtc_memory_nif =
 {
@@ -100,6 +122,11 @@ static const struct Nif get_mac_nif =
 {
     .base.type = NIFFunctionType,
     .nif_ptr = nif_get_mac
+};
+static const struct Nif sha1_nif =
+{
+    .base.type = NIFFunctionType,
+    .nif_ptr = nif_sha1
 };
 
 
@@ -126,6 +153,10 @@ const struct Nif *atomvm_lib_get_nif(const char *nifname)
     if (strcmp("atomvm_lib:get_mac/0", nifname) == 0) {
         TRACE("Resolved platform nif %s ...\n", nifname);
         return &get_mac_nif;
+    }
+    if (strcmp("atomvm_lib:sha1/1", nifname) == 0) {
+        TRACE("Resolved platform nif %s ...\n", nifname);
+        return &sha1_nif;
     }
     return NULL;
 }
