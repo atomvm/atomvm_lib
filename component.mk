@@ -1,3 +1,4 @@
-COMPONENT_ADD_INCLUDEDIRS := nifs/include nifs/submodules/QR-Code-generator/c ports/include
-COMPONENT_SRCDIRS := nifs nifs/submodules/QR-Code-generator/c ports
+COMPONENT_ADD_INCLUDEDIRS := nifs/include ../../main
+COMPONENT_ADD_LDFLAGS = -Wl,--whole-archive -l$(COMPONENT_NAME) -Wl,--no-whole-archive
+COMPONENT_SRCDIRS := nifs
 CXXFLAGS += -fno-rtti

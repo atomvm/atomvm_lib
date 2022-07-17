@@ -39,7 +39,7 @@ Connect the SDA and SCL pins on two selected GPIO pins on your ESP32 device (e.g
 
 To build and flash this application to your ESP32 device, issue the `esp32_flash` target to the `rebar3` command, and optionally specify the device port and baud rate, if they do not match the defaults.
 
-> Note.  For information about the `esp32_flash` target, see the [`atomvm_rebar3_plugin`](https://github.com/fadushin/atomvm_rebar3_plugin) instructions.
+> Note.  For information about the `esp32_flash` target, see the [`atomvm_rebar3_plugin`](https://github.com/atomvm/atomvm_rebar3_plugin) instructions.
 
     shell$ rebar3 esp32_flash -p /dev/tty.usbserial-01940306
     ===> Verifying dependencies...

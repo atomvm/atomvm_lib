@@ -22,6 +22,7 @@
 
 #include <context.h>
 #include <defaultatoms.h>
+#include <esp32_sys.h>
 #include <interop.h>
 #include <nifs.h>
 #include <term.h>
@@ -129,3 +130,8 @@ const struct Nif *atomvm_lib_get_nif(const char *nifname)
     }
     return NULL;
 }
+
+#include <sdkconfig.h>
+#ifdef CONFIG_AVM_LIB_ENABLE
+REGISTER_NIF_COLLECTION(atomvm_lib, atomvm_lib_init, atomvm_lib_get_nif)
+#endif
