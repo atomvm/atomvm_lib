@@ -17,9 +17,9 @@
 
 #include <stdlib.h>
 
+#include <atomvm_lib.h>
 #include <esp_log.h>
 #include <esp_attr.h>
-
 #include <context.h>
 #include <defaultatoms.h>
 #include <esp32_sys.h>
