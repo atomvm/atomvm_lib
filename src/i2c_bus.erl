@@ -178,7 +178,9 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 %% @hidden
-terminate(_Reason, _State) ->
+terminate(_Reason, State) ->
+    io:format("Closing I2C ... ~n"),
+    i2c:close(State#state.port),
     ok.
 
 %% @hidden
