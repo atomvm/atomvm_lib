@@ -63,7 +63,7 @@ static term nif_get_rtc_memory(Context *ctx, int argc, term argv[])
         RAISE_ERROR(OUT_OF_MEMORY_ATOM);
     }
 
-    return term_from_literal_binary(data, data_len, ctx);
+    return term_from_literal_binary(data, data_len, &ctx->heap, ctx->global);
 }
 
 #define MAC_LENGTH 6
@@ -83,7 +83,7 @@ static term nif_get_mac(Context *ctx, int argc, term argv[])
     snprintf(buf, 2 * MAC_LENGTH + 1,
         "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-    return term_from_literal_binary(buf, 2 * MAC_LENGTH, ctx);
+    return term_from_literal_binary(buf, 2 * MAC_LENGTH, &ctx->heap, ctx->global);
 }
 
 
