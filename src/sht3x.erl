@@ -167,11 +167,14 @@ stop(SHT) ->
 %% This function will take a reading from the attached SHT31 sensor.
 %%
 %% The return value is a 2-ary tuple containing the temperature
-%% and humidty readings from the sensor.  Each element of the tuple is a
-%% pair, containing the value in integral and fractional parts.
+%% and humidity readings from the sensor.
 %%
-%% Temperature is expressed in degrees celsius,
-%% and humidity is expressed as relative humidity.
+%% Temperature is a measurement expressed in degrees celsius.
+%%
+%% Humidity is a percentage in the range [0.0 .. 100.0]
+%%
+%% Both values are represented by floating point numbers.
+%%
 %% @end
 %%-----------------------------------------------------------------------------
 -spec take_reading(SHT::sht()) -> {ok, Reading::reading()} | {error, Reason::term()}.
@@ -324,14 +327,8 @@ read_bytes(I2CBus, Len) ->
 
 %% @private
 compute_temp(TempReading) ->
-    rational:to_decimal(
-        rational:add(-45, rational:multiply(175, rational:divide(TempReading, 65535))),
-        3
-    ).
+    -45 + 175 * (TempReading / 65535).
 
 %% @private
 compute_humidity(HumidityReading) ->
-    rational:to_decimal(
-        rational:multiply(100, rational:divide(HumidityReading, 65535)),
-        2
-    ).
+    100 * (HumidityReading / 65535).
