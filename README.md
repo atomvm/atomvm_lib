@@ -33,3 +33,4 @@ The `atomvm_lib` library includes the following features:
 * [BH1750](markdown/bh1750.md) (Luminosity sensor)
 * [LEDC PWM](markdown/ledc_pwm.md)
 * [LoRa](markdown/lora.md) (SX127X transceiver)
+* [HTTPd](markdown/httpd.md) (HTTP daemon)
