@@ -205,6 +205,7 @@ soft_reset(BME) ->
 %% @hidden
 init({I2CBus, Options}) ->
     Calibration = read_calibration_data(I2CBus),
+    ?TRACE("Caligbration data: ~p~n", [Calibration]),
     {ok, #state{
         i2c_bus = I2CBus,
         calibration_data = Calibration,
@@ -314,18 +315,21 @@ read_calibration_data(I2CBus) ->
 
 %% @private
 read_bytes(I2CBus, Register, Len) ->
-    ?TRACE("Reading bytes off I2CBus ~p, Register ~p, Len ~p...", [I2CBus, Register, Len]),
-    i2c_bus:read_bytes(I2CBus, ?BME280_BASE_ADDR, Register, Len).
+    Bytes = i2c_bus:read_bytes(I2CBus, ?BME280_BASE_ADDR, Register, Len),
+    ?TRACE("Read bytes ~p off I2CBus ~p, Register ~p, Len ~p...", [Bytes, I2CBus, Register, Len]),
+    Bytes.
 
 %% @private
 read_byte(I2CBus, Register) ->
     Bytes = read_bytes(I2CBus, Register, 1),
+    ?TRACE("read bytes ~p from register ~p~n", [Bytes, Register]),
     <<Value:8>> = Bytes,
     Value.
 
 %% @private
 write_byte(I2CBus, Register, Byte) ->
     Value = <<Byte:8>>,
+    ?TRACE("writing byte ~p to register ~p~n", [Byte, Register]),
     i2c_bus:write_bytes(I2CBus, ?BME280_BASE_ADDR, Register, Value).
 
 %% @private
@@ -400,16 +404,7 @@ normalize_reading(R, O, D) ->
     case O of
         0 -> undefined;
         _ ->
-            Integral = R div D,
-            FractionalBits = R rem D,
-            Fractional = case D of
-                100 ->
-                    FractionalBits;
-                _ ->
-                    %% (R mod D):D as x:100, so x = 100 * (R mod D)/D
-                    (100 * FractionalBits) div D
-            end,
-            {Integral, Fractional}
+            R / D
     end.
 
 %% See Section 9.1 for max measurement time

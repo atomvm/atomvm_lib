@@ -79,8 +79,7 @@ Connect to the device using the USB port (e.g., via `minicom`), and you should s
     Found AVM partition: size: 1048576, address: 0x110000
     Starting: bme280_example.beam...
     ---
-    Temperature: 18.77C, Pressure: 1012.45hPa, Humidity: 30.47%RH
-    Temperature: 18.85C, Pressure: 1012.49hPa, Humidity: 30.25%RH
-    Temperature: 18.93C, Pressure: 1012.42hPa, Humidity: 30.17%RH
-    Temperature: 18.99C, Pressure: 1012.40hPa, Humidity: 30.43%RH
+    Temperature: 2.47500000000000000000e+01C, Pressure: 1.01286000000000001364e+03hPa, Humidity: 3.33222656250000000000e+01%RH
+    Temperature: 2.47300000000000004263e+01C, Pressure: 1.01283000000000004093e+03hPa, Humidity: 3.34482421875000000000e+01%RH
+    Temperature: 2.47199999999999988631e+01C, Pressure: 1.01282000000000005002e+03hPa, Humidity: 3.34482421875000000000e+01%RH
     ...

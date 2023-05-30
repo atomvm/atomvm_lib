@@ -153,13 +153,19 @@ handle_call({enqueue, Address, Operations}, _From, State) ->
     Reply = try_enqueue_operations(State#state.port, Address, Operations),
     {reply, Reply, State};
 handle_call({write_bytes, Address, Bytes}, _From, State) ->
+    ?TRACE("Writing bytes ~p to address ~p i2c ~p", [Bytes, Address, State#state.port]),
     Reply = i2c:write_bytes(State#state.port, Address, Bytes),
+    ?TRACE("Reply: ~p", [Reply]),
     {reply, Reply, State};
 handle_call({write_bytes, Address, Register, Bytes}, _From, State) ->
+    ?TRACE("Writing bytes ~p to address ~p register ~p i2c ~p", [Bytes, Address, Register, State#state.port]),
     Reply = i2c:write_bytes(State#state.port, Address, Register, Bytes),
+    ?TRACE("Reply: ~p", [Reply]),
     {reply, Reply, State};
 handle_call({read_bytes, Address, Count}, _From, State) ->
+    ?TRACE("Reading bytes off address ~p count ~p i2c ~p", [Address, Count, State#state.port]),
     Reply = i2c:read_bytes(State#state.port, Address, Count),
+    ?TRACE("Reply: ~p", [Reply]),
     {reply, Reply, State};
 handle_call({read_bytes, Address, Register, Count}, _From, State) ->
     ?TRACE("Reading bytes off address ~p register ~p count ~p i2c ~p", [Address, Register, Count, State#state.port]),

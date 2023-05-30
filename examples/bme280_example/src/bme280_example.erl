@@ -30,14 +30,11 @@ loop(BME) ->
     case bme280:take_reading(BME) of
         {ok, Reading} ->
             {Temperature, Pressure, Humidity} = Reading,
-            io:format("Temperature: ~sC, Pressure: ~shPa, Humidity: ~s%RH~n", [
-                to_string(Temperature), to_string(Pressure), to_string(Humidity)
+            io:format("Temperature: ~pC, Pressure: ~phPa, Humidity: ~p%RH~n", [
+                Temperature, Pressure, Humidity
             ]);
         ErrorT ->
             io:format("Error taking reading temperature: ~p~n", [ErrorT])
     end,
     timer:sleep(5000),
     loop(BME).
-
-to_string({Integral, Fractional}) ->
-    io_lib:format("~p.~p", [Integral, Fractional]).
