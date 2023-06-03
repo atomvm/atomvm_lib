@@ -488,14 +488,22 @@ do_broadcast(SPI, Data) ->
     %%
     ?TRACE("transmitting", []),
     ok = write_register(SPI, ?REG_OP_MODE, ?MODE_LONG_RANGE_MODE bor ?MODE_TX),
-    wait_flags(SPI, ?REG_IRQ_FLAGS, ?IRQ_TX_DONE_MASK),
-    ok = write_register(SPI, ?REG_IRQ_FLAGS, ?IRQ_TX_DONE_MASK),
-    %%
-    %% drop back into receive mode
-    %%
-    set_mode(SPI, recv),
-    ?TRACE("done", []),
-    ok.
+    try
+        case wait_flags(SPI, ?REG_IRQ_FLAGS, ?IRQ_TX_DONE_MASK, 10, 157) of
+            ok ->
+                ok = write_register(SPI, ?REG_IRQ_FLAGS, ?IRQ_TX_DONE_MASK),
+                ok;
+            Error ->
+                Error
+        end
+    after
+        %%
+        %% drop back into receive mode
+        %%
+        ?TRACE("set mode to recv", []),
+        set_mode(SPI, recv),
+        ?TRACE("done", [])
+    end.
 
 %% @private
 write_packet_data(SPI, L) ->
@@ -527,14 +535,24 @@ write_packet_data(SPI, L, Len) ->
     end.
 
 %% @private
-wait_flags(SPI, Register, Mask) ->
-    wait_flags(SPI, Register, Mask, 0).
+wait_flags(SPI, Register, Mask, NumTries, SleepMs) ->
+    wait_flags(SPI, Register, Mask, NumTries, SleepMs, 0).
 
 %% @private
-wait_flags(SPI, Register, Mask, 0) ->
+wait_flags(_SPI, _Register, _Mask, 0, _SleepMs, 0) ->
+    ?TRACE("Timed out waiting", []),
+    {error, timeout};
+wait_flags(SPI, Register, Mask, NumTries, SleepMs, 0) ->
+    ?TRACE("waiting...", []),
     {ok, Flags} = read_register(SPI, Register),
-    wait_flags(SPI, Register, Mask, Flags band Mask);
-wait_flags(_SPI, _Register, _Mask, _NotZero) ->
+    case Flags band Mask of
+        0 ->
+            timer:sleep(SleepMs);
+        _ ->
+            ok
+    end,
+    wait_flags(SPI, Register, Mask, NumTries - 1, SleepMs, Flags band Mask);
+wait_flags(_SPI, _Register, _Mask, _NumTries, _SleepMs, _NotZero) ->
     ok.
 
 %%%
@@ -604,10 +622,12 @@ read_packet_data(SPI, Len) ->
 
 %% @private
 read_register({SPI, DeviceName}, Address) ->
+    ?TRACE("Reading from SPI=~p DeviceName=~p Address=~p", [SPI, DeviceName, Address]),
     spi:read_at(SPI, DeviceName, Address bor 16#80, 8).
 
 %% @private
 write_register({SPI, DeviceName}, Address, Data) ->
+    ?TRACE("Writing register SPI=~p DeviceName=~p Address=~p Data=~p", [SPI, DeviceName, Address, Data]),
     {ok, _} = spi:write_at(SPI, DeviceName, Address bor 16#80, 8, Data),
     ok.
 

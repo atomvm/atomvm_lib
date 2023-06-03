@@ -27,15 +27,15 @@ lora_config(Device) -> #{
     device => Device,
     irq => 26,
     busy => 22,
-    reset => 21
+    reset => 14
 }.
 
 %% @private
 spi_config(Device) -> #{
     bus_config => #{
-        miso_io_num => 15,
-        mosi_io_num => 13,
-        sclk_io_num => 14
+        miso_io_num => 19,
+        mosi_io_num => 27,
+        sclk_io_num => 5
     },
     device_config => #{
         ?DEVICE_NAME => #{

@@ -24,12 +24,16 @@ Connect each of your LoRa transceivers to your respective ESP32 devices.  Use th
 | LoRa Pin | ESP32 Pin |
 |----------|-----------|
 | `GND` | `GND` |
-| `SCLK` | `GPIO 14` |
-| `MISO` | `GPIO 12` |
-| `MOSI` | `GPIO 13` |
-| `NCC` | `GPIO 18` |
-| `DPIO0` | `GPIO 26` |
+| `MISO` | `GPIO 19` |
+| `MOSI` | `GPIO 27` |
+| `SCLK` | `GPIO 5` |
+| `CS` (`NSS` on some boards) | `GPIO 18` |
+| `IRQ` (`DPIO0` on SX127x, `DPIO1` on SX126x) | `GPIO 26` |
+| `RESET` | `GPIO 14` |
+| `BUSY` (SX126x only) | `GPIO 22` |
 | `VCC` | `+3.3v` |
+
+> Note.  If you are using an integrated development board with an included LoRa module, consult the data sheet for your development board to identify the correct pin mappings.
 
 The following diagram illustrates the connected devices:
 
@@ -38,11 +42,13 @@ The following diagram illustrates the connected devices:
                                             | ///            \\ |
     +-------------+        +-----------+    |                   |   +-----------+       +-----------+
     |        GND  +--------+ GND      +-----+                   +----+      GND +-------+ GND       |
-    |     GPIO 14 +--------+ SCLK      | antenna            antenna |      SCLK +-------+ GPIO 14   |
-    |     GPIO 12 +--------+ MISO      |                            |      MISO +-------+ GPIO 12   |
-    |     GPIO 13 +--------+ MOSI      |                            |      MOSI +-------+ GPIO 13   |
+    |     GPIO 19 +--------+ MISO      | antenna            antenna |      MISO +-------+ GPIO 19   |
+    |     GPIO 27 +--------+ MOSI      |                            |      MOSI +-------+ GPIO 27   |
+    |     GPIO  5 +--------+ SCLK      |                            |      SCLK +-------+ GPIO  5   |
     |     GPIO 18 +--------+ NCC       |                            |       NCC +-------+ GPIO 18   |
     |     GPIO 26 +--------+ DPIO0     |                            |     DPIO0 +-------+ GPIO 26   |
+    |     GPIO 14 +--------+ RESET     |                            |     RESET +-------+ GPIO 14   |
+    |     GPIO 22 +--------+ BUSY      |                            |      BUSY +-------+ GPIO 22   |
     |      +3.3v  +--------+ VCC       |                            |       VCC +-------+ +3.3v     |
     |             |        |           |                            |           |       |           |
     +-------------+        +-----------+                            +-----------+       +-----------+

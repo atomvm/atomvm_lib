@@ -19,7 +19,7 @@
 -export([start/0]).
 
 start() ->
-    LoraConfig = config:lora_config(sx126x),
+    LoraConfig = config:lora_config(sx127x),
     {ok, Lora} = lora:start(LoraConfig),
     io:format("Lora started.  Sending messages...~n"),
     loop(Lora, 0).
@@ -37,5 +37,5 @@ loop(Lora, I) ->
         exit:timeout ->
             io:format("Timed out broadcasting ~p~n", [Payload])
     end,
-    timer:sleep(10000),
+    timer:sleep(1000),
     loop(Lora, I + 1).
