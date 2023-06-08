@@ -58,10 +58,12 @@
 % -define(TRACE_ENABLED, true).
 -include_lib("atomvm_lib/include/trace.hrl").
 
--type over_sampling() :: ignore | x1 | x2 | x4| x8 | x16.
+-type over_sampling() :: ignore | x1 | x2 | x4 | x8 | x16.
+-type address() :: 16#00..16#ff.
 -type mode() :: sleep | forced | normal.
 -type option() ::
             {temp_oversampling, over_sampling()} |
+            {address, address()} |
             {pressure_oversampling, over_sampling()} |
             {humidity_oversampling, over_sampling()} |
             {mode, mode()}.
