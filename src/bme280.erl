@@ -58,10 +58,12 @@
 % -define(TRACE_ENABLED, true).
 -include_lib("atomvm_lib/include/trace.hrl").
 
--type over_sampling() :: ignore | x1 | x2 | x4| x8 | x16.
+-type over_sampling() :: ignore | x1 | x2 | x4 | x8 | x16.
+-type address() :: 16#00..16#ff.
 -type mode() :: sleep | forced | normal.
 -type option() ::
             {temp_oversampling, over_sampling()} |
+            {address, address()} |
             {pressure_oversampling, over_sampling()} |
             {humidity_oversampling, over_sampling()} |
             {mode, mode()}.
@@ -86,6 +88,7 @@
 -record(state, {
     i2c_bus,
     calibration_data,
+    address,
     temp_oversampling,
     pressure_oversampling,
     humidity_oversampling,
@@ -204,11 +207,13 @@ soft_reset(BME) ->
 
 %% @hidden
 init({I2CBus, Options}) ->
-    Calibration = read_calibration_data(I2CBus),
+    Address = proplists:get_value(address, Options, ?BME280_BASE_ADDR),
+    Calibration = read_calibration_data(I2CBus, Address),
     ?TRACE("Caligbration data: ~p~n", [Calibration]),
     {ok, #state{
         i2c_bus = I2CBus,
         calibration_data = Calibration,
+        address = Address,
         temp_oversampling = normalize_oversampling(proplists:get_value(temp_oversampling, Options, ?DEFAULT_OVERSAMPLING)),
         pressure_oversampling = normalize_oversampling(proplists:get_value(pressure_oversampling, Options, ?DEFAULT_OVERSAMPLING)),
         humidity_oversampling = normalize_oversampling(proplists:get_value(humidity_oversampling, Options, ?DEFAULT_OVERSAMPLING)),
@@ -240,11 +245,11 @@ handle_call(take_reading, _From, State) ->
     Reading = do_take_reading(State),
     {reply, {ok, Reading}, State};
 handle_call(chip_id, _From, State) ->
-    {reply, read_byte(State#state.i2c_bus, ?BME280_REGISTER_CHIPID), State};
+    {reply, read_byte(State#state.i2c_bus, ?BME280_REGISTER_CHIPID, State#state.address), State};
 handle_call(version, _From, State) ->
-    {reply, read_byte(State#state.i2c_bus, ?BME280_REGISTER_VERSION), State};
+    {reply, read_byte(State#state.i2c_bus, ?BME280_REGISTER_VERSION, State#state.address), State};
 handle_call(soft_reset, _From, State) ->
-    {reply, write_byte(State#state.i2c_bus, ?BME280_REGISTER_SOFT_RESET, 16#01), State};
+    {reply, write_byte(State#state.i2c_bus, ?BME280_REGISTER_SOFT_RESET, 16#01, State#state.address), State};
 handle_call(Request, _From, State) ->
     {reply, {error, {unknown_request, Request}}, State}.
 
@@ -286,9 +291,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%
 
 % See section 4.2.2 for the layout of calibration data in the sensor.
-read_calibration_data(I2CBus) ->
+read_calibration_data(I2CBus, Address) ->
     ?TRACE("Reading calibration data off ~p...", [I2CBus]),
-    Bytes1 = read_bytes(I2CBus, 16#88, 25),
+    Bytes1 = read_bytes(I2CBus, 16#88, 25, Address),
     <<
         T1:16/little,        T2:16/signed-little, T3:16/signed-little,
         P1:16/little,        P2:16/signed-little, P3:16/signed-little,
@@ -296,7 +301,7 @@ read_calibration_data(I2CBus) ->
         P7:16/signed-little, P8:16/signed-little, P9:16/signed-little,
         H1:8
     >> = Bytes1,
-    Bytes2 = read_bytes(I2CBus, 16#E1, 7),
+    Bytes2 = read_bytes(I2CBus, 16#E1, 7, Address),
     <<H2:16/signed-little, H3:8, E4:8/signed, E5:8, E6:8/signed, H6:8/signed>> = Bytes2,
 
     H4 = (E4 bsl 4) bor (E5 band 16#0F),
@@ -314,28 +319,29 @@ read_calibration_data(I2CBus) ->
     Calibration.
 
 %% @private
-read_bytes(I2CBus, Register, Len) ->
-    Bytes = i2c_bus:read_bytes(I2CBus, ?BME280_BASE_ADDR, Register, Len),
-    ?TRACE("Read bytes ~p off I2CBus ~p, Register ~p, Len ~p...", [Bytes, I2CBus, Register, Len]),
+read_bytes(I2CBus, Register, Len, Address) ->
+    Bytes = i2c_bus:read_bytes(I2CBus, Address, Register, Len),
+    ?TRACE("Read bytes ~p off I2CBus ~p, Register ~p, Len ~p..., Address ~p", [Bytes, I2CBus, Register, Len, Address]),
     Bytes.
 
 %% @private
-read_byte(I2CBus, Register) ->
-    Bytes = read_bytes(I2CBus, Register, 1),
-    ?TRACE("read bytes ~p from register ~p~n", [Bytes, Register]),
+read_byte(I2CBus, Register, Address) ->
+    Bytes = read_bytes(I2CBus, Register, 1, Address),
+    ?TRACE("read bytes ~p from register ~p in address ~p~n", [Bytes, Register, Address]),
     <<Value:8>> = Bytes,
     Value.
 
 %% @private
-write_byte(I2CBus, Register, Byte) ->
+write_byte(I2CBus, Register, Byte, Address) ->
     Value = <<Byte:8>>,
-    ?TRACE("writing byte ~p to register ~p~n", [Byte, Register]),
-    i2c_bus:write_bytes(I2CBus, ?BME280_BASE_ADDR, Register, Value).
+    ?TRACE("writing byte ~p to register ~p in address ~p~n", [Byte, Register, Address]),
+    i2c_bus:write_bytes(I2CBus, Address, Register, Value).
 
 %% @private
 do_take_reading(State) ->
     #state{
         i2c_bus = I2CBus,
+        address = Address,
         temp_oversampling = TempOverSampling,
         pressure_oversampling = PressureOverSampling,
         humidity_oversampling = HumidityOverSampling,
@@ -346,9 +352,9 @@ do_take_reading(State) ->
     %% with specified oversampling.  Per the spec, we need to write to
     %% the HUM and then MEAS registers.  The mode should almost always be force.
     %%
-    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_HUM, HumidityOverSampling),
+    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_HUM, HumidityOverSampling, Address),
     Meas = (TempOverSampling bsl 5) bor (PressureOverSampling bsl 2) bor Mode,
-    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_MEAS, Meas),
+    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_MEAS, Meas, Address),
     %%
     %% Wait the max time for the sensor to take the reading.
     %% See Section 9.2 of the spec for expected timing measurements.
@@ -363,7 +369,7 @@ do_take_reading(State) ->
     %% Read the data in memory.  The BME280 reference documentation recommends
     %% reading all values in a single block.
     %%
-    Bytes = read_bytes(I2CBus, 16#F7, 8),
+    Bytes = read_bytes(I2CBus, 16#F7, 8, Address),
     <<
         Press_MSB:8, Press_LSB:8, Press_XLSB:8,
         Temp_MSB:8,  Temp_LSB:8,  Temp_XLSB:8,
@@ -393,11 +399,12 @@ do_take_reading(State) ->
 %% @private
 do_sleep(State) ->
     #state{
-        i2c_bus = I2CBus
+        i2c_bus = I2CBus,
+        address = Address
     } = State,
     ?TRACE("Setting BME device to sleep ...", []),
-    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_HUM, 16#FF),
-    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_MEAS, 16#FF).
+    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_HUM, 16#FF, Address),
+    ok = write_byte(I2CBus, ?BME280_REGISTER_CTL_MEAS, 16#FF, Address).
 
 %% @private
 normalize_reading(R, O, D) ->
