@@ -133,5 +133,5 @@ const struct Nif *atomvm_lib_get_nif(const char *nifname)
 
 #include <sdkconfig.h>
 #ifdef CONFIG_AVM_LIB_ENABLE
-REGISTER_NIF_COLLECTION(atomvm_lib, atomvm_lib_init, atomvm_lib_get_nif)
+REGISTER_NIF_COLLECTION(atomvm_lib, atomvm_lib_init, NULL, atomvm_lib_get_nif)
 #endif
