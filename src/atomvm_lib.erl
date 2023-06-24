@@ -16,7 +16,19 @@
 %%
 -module(atomvm_lib).
 
--export([set_rtc_memory/1, get_rtc_memory/0, random/2, sleep_forever/0, to_hex/2, to_hex/1]).
+-export([set_rtc_memory/1, get_rtc_memory/0, random/2, sleep_forever/0, to_hex/2, to_hex/1, set_date_time/1, set_date_time/2, set_time_of_day/1]).
+
+-type year() :: integer().
+-type month() :: 1..12.
+-type day() :: 1..31.
+-type hour() :: 0..23.
+-type minute() :: 0..59.
+-type second() :: 0..59.
+-type millisecond() :: 0..999.
+
+-type date() :: {year(), month(), day()}.
+-type time() :: {hour(), minute(), second(), millisecond()}.
+-type date_time() :: {date(), time()}.
 
 %%-----------------------------------------------------------------------------
 %% @param   Data binary data to store
@@ -129,3 +141,93 @@ hex_char(16#C) -> $C;
 hex_char(16#D) -> $D;
 hex_char(16#E) -> $E;
 hex_char(16#F) -> $F.
+
+%%
+%% @param   DateTime    Date and Time to set
+%% @return  `ok | {error, Reason :: term()}'
+%% @doc Set the system time.
+%%
+%% Equivalent to `set_date_time(DateTime, 0)'
+%% @end
+%%
+-spec set_date_time(DateTime :: date_time()) -> ok.
+set_date_time(DateTime) ->
+    set_date_time(DateTime, 0).
+
+%%
+%% @param   DateTime    Date and Time to set
+%% @param   Millisecond Millisecond granularity not encapsulated in DateTime.
+%% @return  `ok | {error, Reason :: term()}'
+%% @doc Set the system time.
+%%
+%% This function sets the system time to the specified date and time (at
+%% millisecond granularity).  The specified date may not be before the
+%% UNIX epoch (Jan 1, 1970).  Coordinates are all in UTC.
+%%
+%% Note.  Some systems may require special permissions to call this function.
+%% @end
+%%
+-spec set_date_time(DateTime :: date_time(), Millisecond :: 0..999) -> ok.
+set_date_time({{Year, Month, Day}, {Hour, Minute, Second}} = DateTime, Millisecond)
+    when is_integer(Year) andalso Year >= 1970
+        andalso is_integer(Month) andalso Month >= 1 andalso Month =< 12
+        andalso is_integer(Day) andalso Day >= 1 andalso Day =< 31
+        andalso is_integer(Hour) andalso Hour >= 0 andalso Hour =< 24
+        andalso is_integer(Minute) andalso Minute >= 0 andalso Minute =< 59
+        andalso is_integer(Second) andalso Second >= 0 andalso Second =< 59
+        andalso is_integer(Millisecond) andalso Millisecond >= 0 andalso Millisecond =< 999
+    ->
+    ?MODULE:set_time_of_day(seconds_since_epoch(DateTime) * 1000 + Millisecond).
+
+%%
+%% @param   MsSinceUnixEpoch Milliseconds since the UNIX epoch
+%% @param   Millisecond Millisecond granularity not encapsulated in DateTime.
+%% @return  `ok | {error, Reason :: term()}'
+%% @doc Set the system time.
+%%
+%% This function sets the system time to the specified number of milliseconds
+%% after the UNIX epoch (Jan 1, 1970).  Coordinates are all in UTC.
+%%
+%% Note.  Some systems may require special permissions to call this function.
+%% @end
+%%
+-spec set_time_of_day(MsSinceUnixEpoch :: non_neg_integer()) -> ok.
+set_time_of_day(_MsSinceUnixEpoch) ->
+    throw(nif_error).
+
+%% @private
+seconds_since_epoch({{Year, Month, Day}, {Hour, Minute, Second}}) ->
+    YDay = day_of_year(Month, Day) - 1,
+    AdjYear = Year - 1900,
+    %% https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_15
+    Second + Minute * 60 + Hour * 3600 + YDay * 86400 +
+        (AdjYear - 70) * 31536000 + ((AdjYear - 69) div 4) * 86400 -
+        ((AdjYear - 1) div 100) * 86400 + ((AdjYear + 299) div 400) * 86400.
+
+%% @private
+day_of_year(1, Day) when Day =< 31 ->
+    Day;
+day_of_year(2, Day) when Day =< 28 ->
+    31 + Day;
+day_of_year(3, Day) when Day =< 31 ->
+    31 + 28 + Day;
+day_of_year(4, Day) when Day =< 30 ->
+    31 + 28 + 31 + Day;
+day_of_year(5, Day) when Day =< 31 ->
+    31 + 28 + 31 + 30 + Day;
+day_of_year(6, Day) when Day =< 30 ->
+    31 + 28 + 31 + 30 + 31 + Day;
+day_of_year(7, Day) when Day =< 31 ->
+    31 + 28 + 31 + 30 + 31 + 30 + Day;
+day_of_year(8, Day) when Day =< 31 ->
+    31 + 28 + 31 + 30 + 31 + 30 + 31 + Day;
+day_of_year(9, Day) when Day =< 30 ->
+    31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + Day;
+day_of_year(10, Day) when Day =< 31 ->
+    31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + Day;
+day_of_year(11, Day) when Day =< 30 ->
+    31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + Day;
+day_of_year(12, Day) when Day =< 31 ->
+    31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + Day;
+day_of_year(_Month, _Day) ->
+    error(badarg).

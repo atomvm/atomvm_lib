@@ -22,14 +22,17 @@
 #include <esp_attr.h>
 #include <context.h>
 #include <defaultatoms.h>
+#include <errno.h>
 #include <esp32_sys.h>
 #include <interop.h>
 #include <nifs.h>
 #include <term.h>
 #include <memory.h>
 #include <esp_system.h>
+#include <mbedtls/sha1.h>
+#include <sys/time.h>
 
-//#define ENABLE_TRACE
+// #define ENABLE_TRACE
 #include "trace.h"
 
 #define TAG "atomvm_lib"
@@ -86,6 +89,59 @@ static term nif_get_mac(Context *ctx, int argc, term argv[])
     return term_from_literal_binary(buf, 2 * MAC_LENGTH, &ctx->heap, ctx->global);
 }
 
+#define SHA1_LEN 20
+
+static term nif_sha1(Context *ctx, int argc, term argv[])
+{
+    UNUSED(argc);
+    term binary = argv[0];
+    VALIDATE_VALUE(binary, term_is_binary);
+
+    if (UNLIKELY(memory_ensure_free(ctx, term_binary_data_size_in_terms(SHA1_LEN) + BINARY_HEADER_SIZE) != MEMORY_GC_OK)) {
+        RAISE_ERROR(OUT_OF_MEMORY_ATOM);
+    }
+    term ret = term_create_uninitialized_binary(SHA1_LEN, &ctx->heap, ctx->global);
+    binary = argv[0];
+
+    int res = mbedtls_sha1_ret((const unsigned char *) term_binary_data(binary), term_binary_size(binary), (unsigned char *) term_binary_data(ret));
+    if (res != 0) {
+        RAISE_ERROR(BADARG_ATOM);
+    }
+
+    return ret;
+}
+
+static term nif_set_time_of_day(Context *ctx, int argc, term argv[])
+{
+    UNUSED(argc);
+
+    VALIDATE_VALUE(argv[0], term_is_any_integer);
+
+    avm_int64_t ms_since_unix_epoch = term_maybe_unbox_int64(argv[0]);
+
+    TRACE("ms_since_unix_epoch: %lli\n", ms_since_unix_epoch);
+
+    struct timeval tp = {
+        .tv_sec = ms_since_unix_epoch / 1000,
+        .tv_usec = (ms_since_unix_epoch % 1000) * 1000
+    };
+    struct timezone tz = {
+        .tz_minuteswest = 0,
+        .tz_dsttime = 0
+    };
+    int res = settimeofday(&tp, &tz);
+    if (res != 0) {
+        if (UNLIKELY(memory_ensure_free(ctx, TUPLE_SIZE(2)) != MEMORY_GC_OK)) {
+            RAISE_ERROR(OUT_OF_MEMORY_ATOM);
+        }
+        term error = term_alloc_tuple(2, &ctx->heap);
+        term_put_tuple_element(error, 0, ERROR_ATOM);
+        term_put_tuple_element(error, 1, term_from_int(errno));
+        return RAISE_ERROR(error);
+    } else {
+        return OK_ATOM;
+    }
+}
 
 static const struct Nif set_rtc_memory_nif =
 {
@@ -101,6 +157,16 @@ static const struct Nif get_mac_nif =
 {
     .base.type = NIFFunctionType,
     .nif_ptr = nif_get_mac
+};
+static const struct Nif sha1_nif =
+{
+    .base.type = NIFFunctionType,
+    .nif_ptr = nif_sha1
+};
+static const struct Nif set_time_of_day_nif =
+{
+    .base.type = NIFFunctionType,
+    .nif_ptr = nif_set_time_of_day
 };
 
 
@@ -127,6 +193,14 @@ const struct Nif *atomvm_lib_get_nif(const char *nifname)
     if (strcmp("atomvm_lib:get_mac/0", nifname) == 0) {
         TRACE("Resolved platform nif %s ...\n", nifname);
         return &get_mac_nif;
+    }
+    if (strcmp("atomvm_lib:sha1/1", nifname) == 0) {
+        TRACE("Resolved platform nif %s ...\n", nifname);
+        return &sha1_nif;
+    }
+    if (strcmp("atomvm_lib:set_time_of_day/1", nifname) == 0) {
+        TRACE("Resolved platform nif %s ...\n", nifname);
+        return &set_time_of_day_nif;
     }
     return NULL;
 }
