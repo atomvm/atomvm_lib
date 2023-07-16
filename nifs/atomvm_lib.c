@@ -62,7 +62,7 @@ static term nif_get_rtc_memory(Context *ctx, int argc, term argv[])
     UNUSED(argc);
     UNUSED(argv);
 
-    if (UNLIKELY(memory_ensure_free(ctx, term_binary_data_size_in_terms(data_len) + BINARY_HEADER_SIZE) != MEMORY_GC_OK)) {
+    if (UNLIKELY(memory_ensure_free(ctx, term_binary_heap_size(data_len)) != MEMORY_GC_OK)) {
         RAISE_ERROR(OUT_OF_MEMORY_ATOM);
     }
 
@@ -79,7 +79,7 @@ static term nif_get_mac(Context *ctx, int argc, term argv[])
     uint8_t mac[MAC_LENGTH];
     esp_efuse_mac_get_default(mac);
 
-    if (UNLIKELY(memory_ensure_free(ctx, term_binary_data_size_in_terms(2 * MAC_LENGTH) + BINARY_HEADER_SIZE) != MEMORY_GC_OK)) {
+    if (UNLIKELY(memory_ensure_free(ctx, term_binary_heap_size(2 * MAC_LENGTH)) != MEMORY_GC_OK)) {
         RAISE_ERROR(OUT_OF_MEMORY_ATOM);
     }
     char buf[2 * MAC_LENGTH + 1];
@@ -97,7 +97,7 @@ static term nif_sha1(Context *ctx, int argc, term argv[])
     term binary = argv[0];
     VALIDATE_VALUE(binary, term_is_binary);
 
-    if (UNLIKELY(memory_ensure_free(ctx, term_binary_data_size_in_terms(SHA1_LEN) + BINARY_HEADER_SIZE) != MEMORY_GC_OK)) {
+    if (UNLIKELY(memory_ensure_free(ctx, term_binary_heap_size(SHA1_LEN)) != MEMORY_GC_OK)) {
         RAISE_ERROR(OUT_OF_MEMORY_ATOM);
     }
     term ret = term_create_uninitialized_binary(SHA1_LEN, &ctx->heap, ctx->global);

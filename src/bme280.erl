@@ -320,7 +320,7 @@ read_calibration_data(I2CBus, Address) ->
 
 %% @private
 read_bytes(I2CBus, Register, Len, Address) ->
-    Bytes = i2c_bus:read_bytes(I2CBus, Address, Register, Len),
+    {ok, Bytes} = i2c_bus:read_bytes(I2CBus, Address, Register, Len),
     ?TRACE("Read bytes ~p off I2CBus ~p, Register ~p, Len ~p..., Address ~p", [Bytes, I2CBus, Register, Len, Address]),
     Bytes.
 

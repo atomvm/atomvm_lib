@@ -313,12 +313,12 @@ do_take_reading(State) ->
     ok = send_command(I2CBus, Address, get_command(one_time, Resolution)),
     timer:sleep(get_sleep_ms(Resolution, MtReg)),
     case i2c_bus:read_bytes(I2CBus, Address, 2) of
+        {ok, Bin} ->
+            ?TRACE("Got reading: ~p", [Bin]),
+            {ok, to_reading(Bin, Mode, MtReg)};
         error ->
             ?TRACE("Bad reading!", []),
-            {error, bad_reading};
-        Bin ->
-            ?TRACE("Got reading: ~p", [Bin]),
-            {ok, to_reading(Bin, Mode, MtReg)}
+            {error, bad_reading}
     end.
 
 %% @private
@@ -361,7 +361,7 @@ do_continuous_reading(State) ->
         mode = Mode,
         mtreg = MtReg
     } = State,
-    Bin = i2c_bus:read_bytes(I2CBus, Address, 2),
+    {ok, Bin} = i2c_bus:read_bytes(I2CBus, Address, 2),
     to_reading(Bin, Mode, MtReg).
 
 %% @private

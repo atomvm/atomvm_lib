@@ -268,7 +268,7 @@ do_take_reading(State) ->
         error ->
             ?TRACE("Bad reading!", []),
             {error, bad_reading};
-        Bytes ->
+        {ok, Bytes} ->
             {ok, to_reading(Bytes)}
     end.
 
