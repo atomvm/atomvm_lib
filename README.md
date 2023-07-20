@@ -9,7 +9,7 @@ Many of these modules are "optional" and are therefore not a part of the AtomVM 
 The best way to use this library is to include it in your rebar3 project's `rebar.config` as a dependency:
 
     {deps, [
-        {atomvm_lib, {git, "https://gitbub.com/atomvm/atomvm_lib.git", {branch, "master"}}}
+        {atomvm_lib, {git, "https://github.com/atomvm/atomvm_lib.git", {branch, "master"}}}
     ]}.
 
 Make sure to also include the `atomvm_rebar3_plugin`, so that you can generate AtomVM packbeam files and flash them to your ESP32 device.
