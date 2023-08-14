@@ -119,8 +119,9 @@ sleep({Module, Impl}) ->
     Module:sleep(Impl).
 
 %% @hidden
-dump_registers(Lora) ->
-    gen_server:call(Lora, dump_registers).
+dump_registers({_Module, Impl}) ->
+    ?TRACE("Calling dump_registers", []),
+    gen_server:call(Impl, dump_registers).
 
 %%%
 %%% internal functions
