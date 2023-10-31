@@ -28,6 +28,7 @@
 #include <nifs.h>
 #include <term.h>
 #include <memory.h>
+#include <esp_mac.h>
 #include <esp_system.h>
 #include <mbedtls/sha1.h>
 #include <sys/time.h>
