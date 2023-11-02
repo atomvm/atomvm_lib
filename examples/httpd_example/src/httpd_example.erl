@@ -73,7 +73,11 @@ handle_api_request(get, [<<"system_info">>], HttpRequest, _Args) ->
         system_architecture => erlang:system_info(system_architecture),
         atomvm_version => erlang:system_info(atomvm_version),
         esp32_chip_info => get_esp32_chip_info(),
-        esp_idf_version => list_to_binary(erlang:system_info(esp_idf_version))
+        esp_idf_version =>
+            case erlang:system_info(esp_idf_version) of
+                undefined -> "n/a";
+                Version -> list_to_binary(Version)
+            end
     }};
 handle_api_request(get, [<<"memory">>], HttpRequest, _Args) ->
     Socket = maps:get(socket, HttpRequest),
@@ -202,15 +206,10 @@ get_difference(Map1, Map2) ->
 
 get_esp32_chip_info() ->
     case erlang:system_info(esp32_chip_info) of
-        undefined ->
-            undefined;
-        %% TODO remove old API
-        {esp32, Features, Cores, Revision} ->
-            [{features, Features}, {cores, Cores}, {revision, Revision}, {model, undefined}];
         Info when is_map(Info) ->
             maps:to_list(Info);
         _ ->
-            unknown
+            [{features, undefined}, {cores, undefined}, {revision, undefined}, {model, undefined}];
     end.
 
 %% @private
