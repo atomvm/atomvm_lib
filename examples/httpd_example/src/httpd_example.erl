@@ -209,7 +209,7 @@ get_esp32_chip_info() ->
         Info when is_map(Info) ->
             maps:to_list(Info);
         _ ->
-            [{features, undefined}, {cores, undefined}, {revision, undefined}, {model, undefined}];
+            [{features, undefined}, {cores, undefined}, {revision, undefined}, {model, undefined}]
     end.
 
 %% @private
