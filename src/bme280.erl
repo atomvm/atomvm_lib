@@ -254,7 +254,7 @@ soft_reset(BME) ->
 init({I2CBus, Options}) ->
     Address = proplists:get_value(address, Options, ?BME280_BASE_ADDR),
     Calibration = read_calibration_data(I2CBus, Address),
-    ?TRACE("Caligbration data: ~p~n", [Calibration]),
+    ?TRACE("Calibration data: ~p~n", [Calibration]),
     {ok, #state{
         i2c_bus = I2CBus,
         calibration_data = Calibration,
@@ -265,7 +265,7 @@ init({I2CBus, Options}) ->
         mode = normalize_mode(proplists:get_value(mode, Options, ?DEFAULT_MODE))
     }}.
 
-%% private
+%% @private
 normalize_oversampling(OverSampling) ->
     case OverSampling of
         ignore -> 16#00;
@@ -276,7 +276,7 @@ normalize_oversampling(OverSampling) ->
         _ ->  16#05
     end.
 
-%% private
+%% @private
 normalize_mode(Mode) ->
     case Mode of
         sleep -> 16#0;
@@ -372,14 +372,14 @@ read_bytes(I2CBus, Register, Len, Address) ->
 %% @private
 read_byte(I2CBus, Register, Address) ->
     Bytes = read_bytes(I2CBus, Register, 1, Address),
-    ?TRACE("read bytes ~p from register ~p in address ~p~n", [Bytes, Register, Address]),
+    ?TRACE("Read bytes ~p from register ~p in address ~p~n", [Bytes, Register, Address]),
     <<Value:8>> = Bytes,
     Value.
 
 %% @private
 write_byte(I2CBus, Register, Byte, Address) ->
     Value = <<Byte:8>>,
-    ?TRACE("writing byte ~p to register ~p in address ~p~n", [Byte, Register, Address]),
+    ?TRACE("Writing byte ~p to register ~p in address ~p~n", [Byte, Register, Address]),
     i2c_bus:write_bytes(I2CBus, Address, Register, Value).
 
 %% @private
