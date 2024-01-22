@@ -138,9 +138,9 @@ read_bytes(Bus, Address, Register, Count) ->
 %% @hidden
 init(Options) ->
     Port = i2c:open([
-        {sda_io_num, maps:get(sda, Options)},
-        {scl_io_num, maps:get(scl, Options)},
-        {i2c_clock_hz, maps:get(freq_hz, Options)}
+        {sda, maps:get(sda, Options)},
+        {scl, maps:get(scl, Options)},
+        {clock_speed_hz, maps:get(freq_hz, Options)}
     ]),
     ?TRACE("Port opened. Options: ~p Port: ~p", [Options, Port]),
     State = #state{
