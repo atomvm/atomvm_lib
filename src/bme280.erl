@@ -52,7 +52,18 @@
 
 -behaviour(gen_server).
 
--export([start/1, start/2, stop/1, take_reading/1, chip_id/1, version/1, soft_reset/1]).
+-export([
+    start/1,
+    start/2,
+    start_link/1,
+    start_link/2,
+    stop/1,
+    take_reading/1,
+    chip_id/1,
+    version/1,
+    soft_reset/1
+]).
+
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 % -define(TRACE_ENABLED, true).
@@ -138,6 +149,42 @@ start(I2CBus, Options) ->
     gen_server:start(?MODULE, {I2CBus, Options}, []).
 
 %%-----------------------------------------------------------------------------
+%% @param   SDAPin pin number for I2C SDA channel
+%% @param   SCLPin pin number for the I2C SCL channel
+%% @returns {ok, BME} on success, or {error, Reason}, on failure
+%% @doc     Start and link the BME280 driver.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec start_link(I2CBus::i2c_bus:i2c_bus()) -> {ok, BME::bme()} | {error, Reason::term()}.
+start_link(I2CBus) ->
+    start_link(I2CBus, []).
+
+%%-----------------------------------------------------------------------------
+%% @param   SDAPin pin number for I2C SDA channel
+%% @param   SCLPin pin number for the I2C SCL channel
+%% @param   Options additional driver options
+%% @returns {ok, BME} on success, or {error, Reason}, on failure
+%% @doc     Start and link the BME280 driver.
+%%
+%% This operation will start and link the BME driver.  Use the
+%% returned reference in subsequent operations, such as for taking a
+%% reading.
+%%
+%% The Options parameter may be used to fine-tune behavior of the sensor,
+%% but the default values should be sufficient for weather-station based
+%% scenarios.
+%%
+%% Notes:  The default oversampling rates for temperature, pressure, and humidity
+%% is `x4'.  A sampling rate of `ignore' is not tested.
+%%
+%% The default `mode' is `forced'.  Other modes are not tested.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec start_link(I2CBus::i2c_bus:i2c_bus(), Options::options()) -> {ok, BME::bme()} | {error, Reason::term()}.
+start_link(I2CBus, Options) ->
+    gen_server:start_link(?MODULE, {I2CBus, Options}, []).
+
+%%-----------------------------------------------------------------------------
 %% @param       BME a reference to the BME instance created via start
 %% @returns     ok if successful; {error, Reason}, otherwise
 %% @doc Stop the BME280 driver.
@@ -209,7 +256,7 @@ soft_reset(BME) ->
 init({I2CBus, Options}) ->
     Address = proplists:get_value(address, Options, ?BME280_BASE_ADDR),
     Calibration = read_calibration_data(I2CBus, Address),
-    ?TRACE("Caligbration data: ~p~n", [Calibration]),
+    ?TRACE("Calibration data: ~p~n", [Calibration]),
     {ok, #state{
         i2c_bus = I2CBus,
         calibration_data = Calibration,
@@ -220,7 +267,7 @@ init({I2CBus, Options}) ->
         mode = normalize_mode(proplists:get_value(mode, Options, ?DEFAULT_MODE))
     }}.
 
-%% private
+%% @private
 normalize_oversampling(OverSampling) ->
     case OverSampling of
         ignore -> 16#00;
@@ -231,7 +278,7 @@ normalize_oversampling(OverSampling) ->
         _ ->  16#05
     end.
 
-%% private
+%% @private
 normalize_mode(Mode) ->
     case Mode of
         sleep -> 16#0;
@@ -327,14 +374,14 @@ read_bytes(I2CBus, Register, Len, Address) ->
 %% @private
 read_byte(I2CBus, Register, Address) ->
     Bytes = read_bytes(I2CBus, Register, 1, Address),
-    ?TRACE("read bytes ~p from register ~p in address ~p~n", [Bytes, Register, Address]),
+    ?TRACE("Read bytes ~p from register ~p in address ~p~n", [Bytes, Register, Address]),
     <<Value:8>> = Bytes,
     Value.
 
 %% @private
 write_byte(I2CBus, Register, Byte, Address) ->
     Value = <<Byte:8>>,
-    ?TRACE("writing byte ~p to register ~p in address ~p~n", [Byte, Register, Address]),
+    ?TRACE("Writing byte ~p to register ~p in address ~p~n", [Byte, Register, Address]),
     i2c_bus:write_bytes(I2CBus, Address, Register, Value).
 
 %% @private
