@@ -31,8 +31,24 @@
 
 -behaviour(gen_server).
 
--export([start/1, start/2, stop/1, take_reading/1, reset/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([
+    start/1,
+    start/2,
+    start_link/1,
+    start_link/2,
+    stop/1,
+    take_reading/1,
+    reset/1
+]).
+
+-export([
+    init/1,
+    handle_call/3,
+    handle_cast/2,
+    handle_info/2,
+    terminate/2,
+    code_change/3]
+).
 
 % -define(TRACE_ENABLED, true).
 -include_lib("atomvm_lib/include/trace.hrl").
@@ -113,6 +129,47 @@ start(I2CBus) ->
 -spec start(I2CBus::i2c_bus:i2c_bus(), Options::options()) -> {ok, BH::bh()} | {error, Reason::term()}.
 start(I2CBus, Options) ->
     case gen_server:start(?MODULE, {I2CBus, maybe_add_self(Options)}, []) of
+        {ok, Pid} = R ->
+            maybe_start_continuous(Pid, Options),
+            R;
+        E -> E
+    end.
+
+%%-----------------------------------------------------------------------------
+%% @param   SDAPin pin number for I2C SDA channel
+%% @param   SCLPin pin number for the I2C SCL channel
+%% @returns {ok, BH} on success, or {error, Reason}, on failure
+%% @equiv   start_link(SDAPin, SCLPin, [])
+%% @doc     Start the BH1750 driver.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec start_link(I2CBus::i2c_bus:i2c_bus()) -> {ok, BH::bh()} | {error, Reason::term()}.
+start_link(I2CBus) ->
+    start_link(I2CBus, []).
+
+%%-----------------------------------------------------------------------------
+%% @param   SDAPin pin number for I2C SDA channel
+%% @param   SCLPin pin number for the I2C SCL channel
+%% @param   Options additional driver options
+%% @returns {ok, BH} on success, or {error, Reason}, on failure
+%% @doc     Start the BH1750 driver.
+%%
+%% This operation will start the BH driver.  Use the returned reference
+%% in subsequent operations, such as for taking a reading.
+%%
+%% The Options parameter may be used to fine-tune behavior of the sensor,
+%% but the default values should be sufficient for weather-station based
+%% scenarios.
+%%
+%% Notes:  The default oversampling rates for temperature, pressure, and humidity
+%% is `x4'.  A sampling rate of `ignore' is not tested.
+%%
+%% The default `mode' is `forced'.  Other modes are not tested.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec start_link(I2CBus::i2c_bus:i2c_bus(), Options::options()) -> {ok, BH::bh()} | {error, Reason::term()}.
+start_link(I2CBus, Options) ->
+    case gen_server:start_link(?MODULE, {I2CBus, maybe_add_self(Options)}, []) of
         {ok, Pid} = R ->
             maybe_start_continuous(Pid, Options),
             R;
