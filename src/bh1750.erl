@@ -381,23 +381,13 @@ do_take_reading(State) ->
 %% @private
 to_reading(Bin, Mode, MtReg) ->
     <<Reading:16/big-unsigned>> = Bin,
-    X = multiply({1, {2, 10}}, {69, MtReg}),
+    X = 1.2 * (69 / MtReg),
     Y = case Mode of
         high2 ->
-            multiply(X, 2);
+            X * 2;
         _ -> X
     end,
-    divide(Reading, Y).
-
-%% @private
-multiply(A, B) ->
-    rational:simplify(rational:reduce(rational:multiply(A, B))).
-
-%% @private
-divide(0, _B) ->
-    {0, {0, 1}};
-divide(A, B) ->
-    rational:to_decimal(rational:reduce(rational:divide(A, B)), 2).
+    Reading / Y.
 
 %% @private
 do_start_continuous_reading(State) ->
@@ -442,13 +432,8 @@ do_powerdown(State) ->
 
 %% @private
 send_command(I2CBus, Address, Command) ->
-    % ok = i2c_bus:begin_transmission(I2CBus, Address),
-    % ok = i2c_bus:write_byte(I2CBus, Command),
-    % ok = i2c_bus:end_transmission(I2CBus).
     ?TRACE("sending command to bus ~p using address ~p command ~p ...", [I2CBus, Address, Command]),
-    ok = i2c_bus:enqueue(I2CBus, Address, [
-        fun(Port, _Address) -> ok = i2c:write_byte(Port, Command) end
-    ]).
+    i2c_bus:write_bytes(I2CBus, Address, Command).
 
 %% @private
 get_command(one_time, high) ->
@@ -467,22 +452,10 @@ get_command(continuous, low) ->
 %% @private
 get_sleep_ms(Resolution, MtReg) ->
     Base = get_sleep_ms(Resolution),
-    Sleep = multiply(Base, divide(MtReg, 69)),
-    round_sleep(Sleep).
+    Sleep = Base * (MtReg / 69),
+    erlang:round(Sleep).
 
 %% @private
 get_sleep_ms(high) -> 120;
 get_sleep_ms(high2) -> 120;
 get_sleep_ms(low) -> 16.
-
-%% @private
-round_sleep({I, {_N, _D} = F}) ->
-    I + round_sleep(F);
-round_sleep({0, _D}) ->
-    0;
-round_sleep({N, D}) ->
-    case N > (D bsr 1) of
-        true -> 1;
-        _ -> 0
-    end;
-round_sleep(I) when is_integer(I) -> I.

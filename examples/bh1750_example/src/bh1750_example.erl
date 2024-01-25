@@ -37,7 +37,7 @@ start() ->
 one_time_loop(BH) ->
     case bh1750:take_reading(BH) of
         {ok, Reading} ->
-            io:format("Luminosity: ~slx\n", [to_string(Reading)]);
+            io:format("Luminosity: ~slx\n", [Reading]);
         ErrorT ->
             io:format("Error taking reading temperature: ~p~n", [ErrorT])
     end,
@@ -47,9 +47,6 @@ one_time_loop(BH) ->
 continuous_loop(BH) ->
     receive
         Reading ->
-            io:format("Luminosity: ~slx\n", [to_string(Reading)])
+            io:format("Luminosity: ~p\n", [Reading])
     end,
     continuous_loop(BH).
-
-to_string({Integral, {Fractional, _}}) ->
-    io_lib:format("~p.~p", [Integral, Fractional]).
