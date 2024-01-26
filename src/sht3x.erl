@@ -248,18 +248,7 @@ do_take_reading(State) ->
     %%
     {MSB, LSB} = create_measurement_command(State#state.options),
     ?TRACE("measurement_command: ~p", [{MSB, LSB}]),
-    ok = i2c_bus:enqueue(
-        I2CBus, ?SHT31_BASE_ADDR, [
-            fun(Port, _Address) ->
-                ?TRACE("writing ~p", [MSB]),
-                ok = i2c:write_byte(Port, MSB)
-            end,
-            fun(Port, _Address) ->
-                ?TRACE("writing ~p", [LSB]),
-                ok = i2c:write_byte(Port, LSB)
-            end
-        ]
-    ),
+    ok = i2c_bus:write_bytes(I2CBus, ?SHT31_BASE_ADDR, <<MSB:8, LSB:8>>),
     timer:sleep(20),
     %%
     %% Read the data in memory.

@@ -31,8 +31,24 @@
 
 -behaviour(gen_server).
 
--export([start/1, start/2, stop/1, take_reading/1, reset/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([
+    start/1,
+    start/2,
+    start_link/1,
+    start_link/2,
+    stop/1,
+    take_reading/1,
+    reset/1
+]).
+
+-export([
+    init/1,
+    handle_call/3,
+    handle_cast/2,
+    handle_info/2,
+    terminate/2,
+    code_change/3]
+).
 
 % -define(TRACE_ENABLED, true).
 -include_lib("atomvm_lib/include/trace.hrl").
@@ -113,6 +129,47 @@ start(I2CBus) ->
 -spec start(I2CBus::i2c_bus:i2c_bus(), Options::options()) -> {ok, BH::bh()} | {error, Reason::term()}.
 start(I2CBus, Options) ->
     case gen_server:start(?MODULE, {I2CBus, maybe_add_self(Options)}, []) of
+        {ok, Pid} = R ->
+            maybe_start_continuous(Pid, Options),
+            R;
+        E -> E
+    end.
+
+%%-----------------------------------------------------------------------------
+%% @param   SDAPin pin number for I2C SDA channel
+%% @param   SCLPin pin number for the I2C SCL channel
+%% @returns {ok, BH} on success, or {error, Reason}, on failure
+%% @equiv   start_link(SDAPin, SCLPin, [])
+%% @doc     Start the BH1750 driver.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec start_link(I2CBus::i2c_bus:i2c_bus()) -> {ok, BH::bh()} | {error, Reason::term()}.
+start_link(I2CBus) ->
+    start_link(I2CBus, []).
+
+%%-----------------------------------------------------------------------------
+%% @param   SDAPin pin number for I2C SDA channel
+%% @param   SCLPin pin number for the I2C SCL channel
+%% @param   Options additional driver options
+%% @returns {ok, BH} on success, or {error, Reason}, on failure
+%% @doc     Start the BH1750 driver.
+%%
+%% This operation will start the BH driver.  Use the returned reference
+%% in subsequent operations, such as for taking a reading.
+%%
+%% The Options parameter may be used to fine-tune behavior of the sensor,
+%% but the default values should be sufficient for weather-station based
+%% scenarios.
+%%
+%% Notes:  The default oversampling rates for temperature, pressure, and humidity
+%% is `x4'.  A sampling rate of `ignore' is not tested.
+%%
+%% The default `mode' is `forced'.  Other modes are not tested.
+%% @end
+%%-----------------------------------------------------------------------------
+-spec start_link(I2CBus::i2c_bus:i2c_bus(), Options::options()) -> {ok, BH::bh()} | {error, Reason::term()}.
+start_link(I2CBus, Options) ->
+    case gen_server:start_link(?MODULE, {I2CBus, maybe_add_self(Options)}, []) of
         {ok, Pid} = R ->
             maybe_start_continuous(Pid, Options),
             R;
@@ -324,23 +381,13 @@ do_take_reading(State) ->
 %% @private
 to_reading(Bin, Mode, MtReg) ->
     <<Reading:16/big-unsigned>> = Bin,
-    X = multiply({1, {2, 10}}, {69, MtReg}),
+    X = 1.2 * (69 / MtReg),
     Y = case Mode of
         high2 ->
-            multiply(X, 2);
+            X * 2;
         _ -> X
     end,
-    divide(Reading, Y).
-
-%% @private
-multiply(A, B) ->
-    rational:simplify(rational:reduce(rational:multiply(A, B))).
-
-%% @private
-divide(0, _B) ->
-    {0, {0, 1}};
-divide(A, B) ->
-    rational:to_decimal(rational:reduce(rational:divide(A, B)), 2).
+    Reading / Y.
 
 %% @private
 do_start_continuous_reading(State) ->
@@ -385,13 +432,8 @@ do_powerdown(State) ->
 
 %% @private
 send_command(I2CBus, Address, Command) ->
-    % ok = i2c_bus:begin_transmission(I2CBus, Address),
-    % ok = i2c_bus:write_byte(I2CBus, Command),
-    % ok = i2c_bus:end_transmission(I2CBus).
     ?TRACE("sending command to bus ~p using address ~p command ~p ...", [I2CBus, Address, Command]),
-    ok = i2c_bus:enqueue(I2CBus, Address, [
-        fun(Port, _Address) -> ok = i2c:write_byte(Port, Command) end
-    ]).
+    i2c_bus:write_bytes(I2CBus, Address, Command).
 
 %% @private
 get_command(one_time, high) ->
@@ -410,22 +452,10 @@ get_command(continuous, low) ->
 %% @private
 get_sleep_ms(Resolution, MtReg) ->
     Base = get_sleep_ms(Resolution),
-    Sleep = multiply(Base, divide(MtReg, 69)),
-    round_sleep(Sleep).
+    Sleep = Base * (MtReg / 69),
+    erlang:round(Sleep).
 
 %% @private
 get_sleep_ms(high) -> 120;
 get_sleep_ms(high2) -> 120;
 get_sleep_ms(low) -> 16.
-
-%% @private
-round_sleep({I, {_N, _D} = F}) ->
-    I + round_sleep(F);
-round_sleep({0, _D}) ->
-    0;
-round_sleep({N, D}) ->
-    case N > (D bsr 1) of
-        true -> 1;
-        _ -> 0
-    end;
-round_sleep(I) when is_integer(I) -> I.

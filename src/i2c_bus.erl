@@ -46,7 +46,7 @@
 -define(DEFAULT_OPTIONS, #{freq_hz => 400000}).
 
 -record(state, {
-    port
+    i2c
 }).
 
 %%-----------------------------------------------------------------------------
@@ -137,39 +137,38 @@ read_bytes(Bus, Address, Register, Count) ->
 
 %% @hidden
 init(Options) ->
-    Port = i2c:open([
-        {sda, maps:get(sda, Options)},
-        {scl, maps:get(scl, Options)},
+    I2C = i2c:open([
         {clock_speed_hz, maps:get(freq_hz, Options)}
+        | maps:to_list(Options)
     ]),
-    ?TRACE("Port opened. Options: ~p Port: ~p", [Options, Port]),
+    ?TRACE("I2C opened. Options: ~p I2C: ~p", [Options, I2C]),
     State = #state{
-        port = Port
+        i2c = I2C
     },
     {ok, State}.
 
 %% @hidden
 handle_call({enqueue, Address, Operations}, _From, State) ->
-    Reply = try_enqueue_operations(State#state.port, Address, Operations),
+    Reply = try_enqueue_operations(State#state.i2c, Address, Operations),
     {reply, Reply, State};
 handle_call({write_bytes, Address, Bytes}, _From, State) ->
-    ?TRACE("Writing bytes ~p to address ~p i2c ~p", [Bytes, Address, State#state.port]),
-    Reply = i2c:write_bytes(State#state.port, Address, Bytes),
+    ?TRACE("Writing bytes ~p to address ~p i2c ~p", [Bytes, Address, State#state.i2c]),
+    Reply = i2c:write_bytes(State#state.i2c, Address, Bytes),
     ?TRACE("Reply: ~p", [Reply]),
     {reply, Reply, State};
 handle_call({write_bytes, Address, Register, Bytes}, _From, State) ->
-    ?TRACE("Writing bytes ~p to address ~p register ~p i2c ~p", [Bytes, Address, Register, State#state.port]),
-    Reply = i2c:write_bytes(State#state.port, Address, Register, Bytes),
+    ?TRACE("Writing bytes ~p to address ~p register ~p i2c ~p", [Bytes, Address, Register, State#state.i2c]),
+    Reply = i2c:write_bytes(State#state.i2c, Address, Register, Bytes),
     ?TRACE("Reply: ~p", [Reply]),
     {reply, Reply, State};
 handle_call({read_bytes, Address, Count}, _From, State) ->
-    ?TRACE("Reading bytes off address ~p count ~p i2c ~p", [Address, Count, State#state.port]),
-    Reply = i2c:read_bytes(State#state.port, Address, Count),
+    ?TRACE("Reading bytes off address ~p count ~p i2c ~p", [Address, Count, State#state.i2c]),
+    Reply = i2c:read_bytes(State#state.i2c, Address, Count),
     ?TRACE("Reply: ~p", [Reply]),
     {reply, Reply, State};
 handle_call({read_bytes, Address, Register, Count}, _From, State) ->
-    ?TRACE("Reading bytes off address ~p register ~p count ~p i2c ~p", [Address, Register, Count, State#state.port]),
-    Reply = i2c:read_bytes(State#state.port, Address, Register, Count),
+    ?TRACE("Reading bytes off address ~p register ~p count ~p i2c ~p", [Address, Register, Count, State#state.i2c]),
+    Reply = i2c:read_bytes(State#state.i2c, Address, Register, Count),
     ?TRACE("Reply: ~p", [Reply]),
     {reply, Reply, State};
 handle_call(Request, _From, State) ->
@@ -186,7 +185,7 @@ handle_info(_Info, State) ->
 %% @hidden
 terminate(_Reason, State) ->
     io:format("Closing I2C ... ~n"),
-    i2c:close(State#state.port),
+    i2c:close(State#state.i2c),
     ok.
 
 %% @hidden
@@ -203,13 +202,15 @@ maybe_add_defaults(Options) ->
     maps:merge(?DEFAULT_OPTIONS, Options).
 
 %% @private
-try_enqueue_operations(Port, Address, Operations) ->
-    case i2c:begin_transmission(Port, Address) of
+try_enqueue_operations(I2C, Address, Operations) ->
+    ?TRACE("Enqueing on I2C ~p at address ~p", [I2C, Address]),
+    case i2c:begin_transmission(I2C, Address) of
         ok ->
             try
                 lists:foreach(
                     fun(Operation) ->
-                        Operation(Port, Address)
+                        ?TRACE("Executing on I2C ~p at address ~p", [I2C, Address]),
+                        Operation(I2C, Address)
                     end,
                     Operations
                 )
@@ -217,7 +218,7 @@ try_enqueue_operations(Port, Address, Operations) ->
                 _:E ->
                     {error, E}
             after
-                i2c:end_transmission(Port)
+                i2c:end_transmission(I2C)
             end;
         E ->
             {error, E}
