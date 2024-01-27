@@ -114,21 +114,21 @@ init(Config) ->
                         ok ->
                             RecvLen = maps:get(recv_len, Config, ?DEFAULT_RECV_LEN),
                             RecvTimeoutMs = maps:get(recv_timeout_ms, Config, ?DEFAULT_RECV_TIMEOUT_MS),
-                            spawn(fun() -> accept(Self, Socket, RecvLen, RecvTimeoutMs) end),
                             %% TODO case match
                             {Handler, HandlerArgs} = maps:get(handler, Config),
-                            case Handler:init(HandlerArgs) of
-                                {ok, HandlerState} ->
-                                    {ok, #state{
-                                        config = Config,
-                                        handler = Handler,
-                                        handler_state = HandlerState,
-                                        recv_timeout_ms = RecvTimeoutMs
-                                    }};
-                                HandlerError ->
-                                    try_close(Socket),
-                                    {stop, {handler_error, HandlerError}}
-                            end;
+                            spawn_opt(fun() -> accept(Self, Socket, {Handler, HandlerArgs}, {RecvLen, RecvTimeoutMs}) end, [link]),
+                            % case Handler:init(HandlerArgs) of
+                            %     {ok, HandlerState} ->
+                            %         {ok, #state{
+                            %             config = Config,
+                            %             handler = Handler,
+                            %             handler_state = HandlerState
+                            %         }};
+                            %     HandlerError ->
+                            %         try_close(Socket),
+                            %         {stop, {handler_error, HandlerError}}
+                            % end;
+                            {ok, #state{config = Config}};
                         ListenError ->
                             try_close(Socket),
                             {stop, {listen_error, ListenError}}
@@ -155,37 +155,37 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %% @hidden
-handle_info({tcp_closed, Socket}, State) ->
-    ?LOG_DEBUG("TCP Socket closed ~p", [Socket]),
-    #state{handler=Handler, handler_state=HandlerState} = State,
-    NewHandlerState = Handler:handle_tcp_closed(Socket, HandlerState),
-    {noreply, State#state{handler_state=NewHandlerState}};
-handle_info({tcp, Socket, Packet}, State) ->
-    #state{handler=Handler, handler_state=HandlerState} = State,
-    ?LOG_DEBUG("received packet: len(~p) from ~p", [erlang:byte_size(Packet), socket:peername(Socket)]),
-    case Handler:handle_receive(Socket, Packet, HandlerState) of
-        {reply, ResponsePacket, ResponseState} ->
-            ?LOG_DEBUG("Sending reply to endpoint ~p", [socket:peername(Socket)]),
-            try_send(Socket, ResponsePacket),
-            {noreply, State#state{handler_state=ResponseState}};
-        {noreply, ResponseState} ->
-            ?LOG_DEBUG("no reply", []),
-            {noreply, State#state{handler_state=ResponseState}};
-        {close, ResponsePacket} ->
-            ?LOG_DEBUG("Sending reply to endpoint ~p and closing socket: ~p", [socket:peername(Socket), Socket]),
-            try_send(Socket, ResponsePacket),
-            % timer:sleep(500),
-            try_close(Socket),
-            {noreply, State};
-        close ->
-            ?LOG_DEBUG("Closing socket ~p", [Socket]),
-            try_close(Socket),
-            {noreply, State};
-        SomethingElse ->
-            ?LOG_ERROR("Unexpected response from handler ~p: ~p", [Handler, SomethingElse]),
-            try_close(Socket),
-            {noreply, State}
-    end;
+% handle_info({tcp_closed, Socket}, State) ->
+%     ?LOG_DEBUG("TCP Socket closed ~p", [Socket]),
+%     #state{handler=Handler, handler_state=HandlerState} = State,
+%     NewHandlerState = Handler:handle_tcp_closed(Socket, HandlerState),
+%     {noreply, State#state{handler_state=NewHandlerState}};
+% handle_info({tcp, Socket, Packet}, State) ->
+%     #state{handler=Handler, handler_state=HandlerState} = State,
+%     ?LOG_DEBUG("received packet: len(~p) from ~p", [erlang:byte_size(Packet), socket:peername(Socket)]),
+%     case Handler:handle_receive(Socket, Packet, HandlerState) of
+%         {reply, ResponsePacket, ResponseState} ->
+%             ?LOG_DEBUG("Sending reply to endpoint ~p", [socket:peername(Socket)]),
+%             try_send(Socket, ResponsePacket),
+%             {noreply, State#state{handler_state=ResponseState}};
+%         {noreply, ResponseState} ->
+%             ?LOG_DEBUG("no reply", []),
+%             {noreply, State#state{handler_state=ResponseState}};
+%         {close, ResponsePacket} ->
+%             ?LOG_DEBUG("Sending reply to endpoint ~p and closing socket: ~p", [socket:peername(Socket), Socket]),
+%             try_send(Socket, ResponsePacket),
+%             % timer:sleep(500),
+%             try_close(Socket),
+%             {noreply, State};
+%         close ->
+%             ?LOG_DEBUG("Closing socket ~p", [Socket]),
+%             try_close(Socket),
+%             {noreply, State};
+%         SomethingElse ->
+%             ?LOG_ERROR("Unexpected response from handler ~p: ~p", [Handler, SomethingElse]),
+%             try_close(Socket),
+%             {noreply, State}
+%     end;
 handle_info(Info, State) ->
     ?LOG_WARNING("Received spurious info msg: ~p", [Info]),
     {noreply, State}.
@@ -260,6 +260,10 @@ set_socket_options(Socket, SocketOptions) ->
         SocketOptions
     ).
 
+-record(loop_state, {
+    handler, handler_state
+}).
+
 %% @private
 accept(ControllingProcess, ListenSocket, RecvLen, RecvTimeoutMs) ->
     ?LOG_DEBUG("pid ~p Waiting for connection on ~p ...", [self(), socket:sockname(ListenSocket)]),
@@ -267,27 +271,42 @@ accept(ControllingProcess, ListenSocket, RecvLen, RecvTimeoutMs) ->
     case socket:accept(ListenSocket) of
         {ok, Connection} ->
             ?LOG_INFO("Accepted connection from ~p", [socket:peername(Connection)]),
-            spawn(fun() -> accept(ControllingProcess, ListenSocket, RecvLen, RecvTimeoutMs) end),
-            loop(ControllingProcess, Connection, RecvLen, RecvTimeoutMs);
+            spawn_opt(fun() -> accept(ControllingProcess, ListenSocket, {Handler, HandlerArgs}, {RecvLen, RecvTimeoutMs}) end, [link]),
+            start_loop(ControllingProcess, Connection, {Handler, HandlerArgs}, {RecvLen, RecvTimeoutMs});
         Error ->
             ?LOG_ERROR("Error accepting connection: ~p", [Error])
     end.
 
+start_loop(ControllingProcess, Connection, {Handler, HandlerArgs}, {RecvLen, RecvTimeoutMs}) ->
+    erlang:display({Handler, HandlerArgs}),
+    case Handler:init(HandlerArgs) of
+        {ok, HandlerState} ->
+            LoopState = #loop_state{
+                handler = Handler,
+                handler_state = HandlerState
+            },
+            loop(ControllingProcess, Connection, LoopState, RecvLen, RecvTimeoutMs);
+        _HandlerError ->
+            try_close(Connection)
+        end.
 
 %% @private
-loop(ControllingProcess, Connection, RecvLen, RecvTimeoutMs) ->
-    % erlang:display({calling_get_recv_timeout_ms, self(), on_controlling_process, ControllingProcess}),
-    % RecvTimeoutMs = get_recv_timeout_ms(ControllingProcess),
-    % erlang:display({got_reply, self(), RecvTimeoutMs}),
-    % erlang:display({recv_timeout_ms, RecvTimeoutMs, self()}),
+loop(ControllingProcess, Connection, LoopState, RecvLen, RecvTimeoutMs) ->
+    Handler = LoopState#loop_state.handler,
+    HandlerState = LoopState#loop_state.handler_state,
     case socket:recv(Connection, RecvLen, RecvTimeoutMs) of
-        {ok, Data} ->
-            ?LOG_DEBUG("Received data ~p on connection ~p", [Data, Connection]),
-            ControllingProcess ! {tcp, Connection, Data},
-            loop(ControllingProcess, Connection, RecvLen, RecvTimeoutMs);
+        {ok, Packet} ->
+            ?LOG_DEBUG("Received data ~p on connection ~p", [Packet, Connection]),
+            NewLoopState = process_packet(Connection, Packet, LoopState),
+            loop(ControllingProcess, Connection, NewLoopState, RecvLen, RecvTimeoutMs);
         {error, closed} ->
             ?LOG_INFO("Peer closed connection ~p", [Connection]),
-            ControllingProcess ! {tcp_closed, Connection},
+            _NewHandlerState = Handler:handle_tcp_closed(Connection, HandlerState),
+            ok;
+        {error, timeout} ->
+            ?LOG_INFO("Client peer timed out on receive ~p", [Connection]),
+            try_close(Connection),
+            _NewHandlerState = Handler:handle_tcp_closed(Connection, HandlerState),
             ok;
         {error, timeout} ->
             ?LOG_INFO("Client peer timed out on receive ~p", [Connection]),
@@ -295,4 +314,31 @@ loop(ControllingProcess, Connection, RecvLen, RecvTimeoutMs) ->
         {error, _SomethingElse} ->
             ?LOG_ERROR("Some other error occurred ~p", [Connection]),
             try_close(Connection)
+    end.
+
+process_packet(Socket, Packet, LoopState) ->
+    #loop_state{handler=Handler, handler_state=HandlerState} = LoopState,
+    ?LOG_DEBUG("received packet: len(~p) from ~p", [erlang:byte_size(Packet), socket:peername(Socket)]),
+    case Handler:handle_receive(Socket, Packet, HandlerState) of
+        {reply, ResponsePacket, ResponseState} ->
+            ?LOG_DEBUG("Sending reply to endpoint ~p", [socket:peername(Socket)]),
+            try_send(Socket, ResponsePacket),
+            LoopState#loop_state{handler_state=ResponseState};
+        {noreply, ResponseState} ->
+            ?LOG_DEBUG("no reply", []),
+            LoopState#loop_state{handler_state=ResponseState};
+        {close, ResponsePacket} ->
+            ?LOG_DEBUG("Sending reply to endpoint ~p and closing socket: ~p", [socket:peername(Socket), Socket]),
+            try_send(Socket, ResponsePacket),
+            % timer:sleep(500),
+            try_close(Socket),
+            LoopState;
+        close ->
+            ?LOG_DEBUG("Closing socket ~p", [Socket]),
+            try_close(Socket),
+            LoopState;
+        SomethingElse ->
+            ?LOG_ERROR("Unexpected response from handler ~p: ~p", [Handler, SomethingElse]),
+            try_close(Socket),
+            LoopState
     end.

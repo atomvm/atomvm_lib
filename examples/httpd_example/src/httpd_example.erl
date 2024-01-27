@@ -184,15 +184,15 @@ update_loop(WebSocket, LastMemoryData) ->
         _ ->
             Binary = iolist_to_binary(json_encoder:encode(NewMemoryData)),
             io:format("Sending websocket message to client ~p ... ", [Binary]),
-        try
-            httpd_ws_handler:send(WebSocket, Binary),
-            io:format("sent.~n"),
-            update_loop(WebSocket, LatestMemoryData)
-        catch
-            C:E ->
-                io:format("An error occurred sending a status update message: ~p~n", [{C, E}])
-        end
-end.
+            try
+                httpd_ws_handler:send(WebSocket, Binary),
+                io:format("sent.~n"),
+                update_loop(WebSocket, LatestMemoryData)
+            catch
+                C:E ->
+                    io:format("An error occurred sending a status update message: ~p~n", [{C, E}])
+            end
+    end.
 
 %%
 %% Internal functions
