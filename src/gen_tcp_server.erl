@@ -1,5 +1,5 @@
 %%
-%% Copyright (c) 2022 dushin.net
+%% Copyright (c) 2023 dushin.net
 %% All rights reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,30 @@
 
 -module(gen_tcp_server).
 
--export([start/4, start/3, start_link/4, start_link/3, stop/1]).
+-export([start/1, start_link/1, stop/1]).
+
+%% internal APIs
+-export([get_recv_timeout_ms/1, set_recv_timeout_ms/2]).
 
 -behaviour(gen_server).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
+
+-type config() :: #{
+    bind_address => socket:sockaddr(),
+    socket_options => [socket:socket_option()],
+    handler => {
+        Module :: module(),
+        Args :: term()
+    },
+    recv_timeout_ms => non_neg_integer() | infinity,
+    recv_len => non_neg_integer()
+}.
+-opaque gen_tcp_server() :: pid().
+
+-export_type([
+    config/0,
+    gen_tcp_server/0
+]).
 
 %%
 %% gen_tcp_server behavior
@@ -34,57 +54,77 @@
 
 -callback handle_tcp_closed(Socket :: term(), State :: term()) -> ok.
 
-% -define(TRACE_ENABLED, true).
--include_lib("atomvm_lib/include/trace.hrl").
-
--record(state, {
-    handler,
-    handler_state
-}).
+-include_lib("kernel/include/logger.hrl").
 
 -define(DEFAULT_BIND_OPTIONS, #{
     family => inet,
     addr => any
 }).
 -define(DEFAULT_SOCKET_OPTIONS, #{}).
+-define(DEFAULT_RECV_TIMEOUT_MS, infinity).
+-define(DEFAULT_RECV_LEN, 0).
 
 %%
 %% API
 %%
 
-start(BindOptions, Handler, Args) ->
-    start(BindOptions, ?DEFAULT_SOCKET_OPTIONS, Handler, Args).
+-spec start_link(Config :: config()) -> {ok, gen_tcp_server()} | {error, Reason :: term()}.
+start_link(Config) ->
+    internal_start(Config, fun gen_server:start_link/3).
 
-start(BindOptions, SocketOptions, Handler, Args) ->
-    gen_server:start(?MODULE, {maps:merge(?DEFAULT_BIND_OPTIONS, BindOptions), SocketOptions, Handler, Args}, []).
+-spec start(Config :: config()) -> {ok, gen_tcp_server()} | {error, Reason :: term()}.
+start(Config) ->
+    internal_start(Config, fun gen_server:start/3).
 
-start_link(BindOptions, Handler, Args) ->
-    start_link(BindOptions, ?DEFAULT_SOCKET_OPTIONS, Handler, Args).
-
-start_link(BindOptions, SocketOptions, Handler, Args) ->
-    gen_server:start_link(?MODULE, {maps:merge(?DEFAULT_BIND_OPTIONS, BindOptions), SocketOptions, Handler, Args}, []).
+%% @private
+internal_start(Config, StartFun) ->
+    StartFun(?MODULE, Config, []).
 
 stop(Server) ->
     gen_server:stop(Server).
+
+get_recv_timeout_ms(Server) ->
+    gen_server:call(Server, get_recv_timeout_ms).
+
+set_recv_timeout_ms(Server, RecvTimeoutMs) ->
+    gen_server:call(Server, {set_recv_timeout_ms, RecvTimeoutMs}).
 
 %%
 %% gen_server implementation
 %%
 
+-record(state, {
+    config,
+    handler,
+    handler_state,
+    recv_timeout_ms
+}).
+
 %% @hidden
-init({BindOptions, SocketOptions, Handler, Args}) ->
+init(Config) ->
     Self = self(),
     case socket:open(inet, stream, tcp) of
         {ok, Socket} ->
+            SocketOptions = maps:get(socket_options, Config, ?DEFAULT_SOCKET_OPTIONS),
             ok = set_socket_options(Socket, SocketOptions),
-            case socket:bind(Socket, BindOptions) of
+            BindAddress = maps:merge(?DEFAULT_BIND_OPTIONS, maps:get(bind_address, Config, #{})),
+            case socket:bind(Socket, BindAddress) of
                 ok ->
                     case socket:listen(Socket) of
                         ok ->
-                            spawn(fun() -> accept(Self, Socket) end),
-                            case Handler:init(Args) of
+                            RecvLen = maps:get(recv_len, Config, ?DEFAULT_RECV_LEN),
+                            RecvTimeoutMs = maps:get(recv_timeout_ms, Config, ?DEFAULT_RECV_TIMEOUT_MS),
+                            spawn(fun() -> accept(Self, Socket, RecvLen, RecvTimeoutMs) end),
+                            %% TODO case match
+                            {Handler, HandlerArgs} = maps:get(handler, Config),
+                            case Handler:init(HandlerArgs) of
                                 {ok, HandlerState} ->
-                                    {ok, #state{handler = Handler, handler_state = HandlerState}};
+                                    {ok, #state{
+                                        config = Config,
+                                        handler = Handler,
+                                        handler_state = HandlerState,
+                                        recv_timeout_ms = RecvTimeoutMs
+                                    }};
                                 HandlerError ->
                                     try_close(Socket),
                                     {stop, {handler_error, HandlerError}}
@@ -99,19 +139,15 @@ init({BindOptions, SocketOptions, Handler, Args}) ->
             end;
         OpenError ->
             {stop, {open_error, OpenError}}
-    end;
-init({Socket, Handler, Args}) ->
-    Self = self(),
-    case Handler:init(Args) of
-        {ok, HandlerState} ->
-            spawn(fun() -> loop(Self, Socket) end),
-            {ok, #state{handler = Handler, handler_state = HandlerState}};
-        HandlerError ->
-            {stop, {handler_error, HandlerError}}
     end.
 
 %% @hidden
-handle_call(_From, _Request, State) ->
+handle_call(get_recv_timeout_ms, _From, State) ->
+    io:format("wtf ~p~n", [State#state.recv_timeout_ms]),
+    {reply, State#state.recv_timeout_ms, State};
+handle_call({set_recv_timeout_ms, RecvTimeoutMs}, _From, State) ->
+    {reply, ok, State#state{recv_timeout_ms = RecvTimeoutMs}};
+handle_call(_Request, _From, State) ->
     {noreply, State}.
 
 %% @hidden
@@ -120,38 +156,38 @@ handle_cast(_Msg, State) ->
 
 %% @hidden
 handle_info({tcp_closed, Socket}, State) ->
-    ?TRACE("TCP Socket closed ~p", [Socket]),
+    ?LOG_DEBUG("TCP Socket closed ~p", [Socket]),
     #state{handler=Handler, handler_state=HandlerState} = State,
     NewHandlerState = Handler:handle_tcp_closed(Socket, HandlerState),
     {noreply, State#state{handler_state=NewHandlerState}};
 handle_info({tcp, Socket, Packet}, State) ->
     #state{handler=Handler, handler_state=HandlerState} = State,
-    ?TRACE("received packet: len(~p) from ~p", [erlang:byte_size(Packet), socket:peername(Socket)]),
+    ?LOG_DEBUG("received packet: len(~p) from ~p", [erlang:byte_size(Packet), socket:peername(Socket)]),
     case Handler:handle_receive(Socket, Packet, HandlerState) of
         {reply, ResponsePacket, ResponseState} ->
-            ?TRACE("Sending reply to endpoint ~p", [socket:peername(Socket)]),
+            ?LOG_DEBUG("Sending reply to endpoint ~p", [socket:peername(Socket)]),
             try_send(Socket, ResponsePacket),
             {noreply, State#state{handler_state=ResponseState}};
         {noreply, ResponseState} ->
-            ?TRACE("no reply", []),
+            ?LOG_DEBUG("no reply", []),
             {noreply, State#state{handler_state=ResponseState}};
         {close, ResponsePacket} ->
-            ?TRACE("Sending reply to endpoint ~p and closing socket: ~p", [socket:peername(Socket), Socket]),
+            ?LOG_DEBUG("Sending reply to endpoint ~p and closing socket: ~p", [socket:peername(Socket), Socket]),
             try_send(Socket, ResponsePacket),
             % timer:sleep(500),
             try_close(Socket),
             {noreply, State};
-        close  ->
-            ?TRACE("Closing socket ~p", [Socket]),
+        close ->
+            ?LOG_DEBUG("Closing socket ~p", [Socket]),
             try_close(Socket),
             {noreply, State};
-        _SomethingElse ->
-            ?TRACE("Unexpected response from handler ~p: ~p", [Handler, SomethingElse]),
+        SomethingElse ->
+            ?LOG_ERROR("Unexpected response from handler ~p: ~p", [Handler, SomethingElse]),
             try_close(Socket),
             {noreply, State}
     end;
 handle_info(Info, State) ->
-    io:format("Received spurious info msg: ~p~n", [Info]),
+    ?LOG_WARNING("Received spurious info msg: ~p", [Info]),
     {noreply, State}.
 
 %% @hidden
@@ -164,23 +200,23 @@ terminate(_Reason, _State) ->
 
 %% @private
 try_send(Socket, Packet) when is_binary(Packet) ->
-    ?TRACE(
+    ?LOG_DEBUG(
         "Trying to send binary packet data to socket ~p.  Packet (or len): ~p", [
         Socket, case byte_size(Packet) < 32 of true -> Packet; _ -> byte_size(Packet) end
     ]),
     case socket:send(Socket, Packet) of
         ok ->
-            ?TRACE("sent.", []),
+            ?LOG_DEBUG("sent.", []),
             ok;
         {ok, Rest} ->
-            ?TRACE("sent.  remaining: ~p", [Rest]),
+            ?LOG_DEBUG("sent.  remaining: ~p", [Rest]),
             try_send(Socket, Rest);
         Error ->
-            io:format("Send failed due to error ~p~n", [Error])
+            ?LOG_ERROR("Send failed due to error ~p", [Error])
     end;
 try_send(Socket, Char) when is_integer(Char) ->
     %% TODO handle unicode
-    ?TRACE("Sending char ~p as ~p", [Char, <<Char:8>>]),
+    ?LOG_DEBUG("Sending char ~p as ~p", [Char, <<Char:8>>]),
     try_send(Socket, <<Char:8>>);
 try_send(Socket, List) when is_list(List) ->
     case is_string(List) of
@@ -209,7 +245,7 @@ try_close(Socket) ->
         ok ->
             ok;
         Error ->
-            io:format("Close failed due to error ~p~n", [Error])
+            ?LOG_WARNING("Close failed due to error ~p", [Error])
     end.
 
 %% @private
@@ -225,30 +261,38 @@ set_socket_options(Socket, SocketOptions) ->
     ).
 
 %% @private
-accept(ControllingProcess, ListenSocket) ->
-    ?TRACE("pid ~p Waiting for connection on ~p ...", [self(), socket:sockname(ListenSocket)]),
+accept(ControllingProcess, ListenSocket, RecvLen, RecvTimeoutMs) ->
+    ?LOG_DEBUG("pid ~p Waiting for connection on ~p ...", [self(), socket:sockname(ListenSocket)]),
+    %% TODO add support for accept timeout
     case socket:accept(ListenSocket) of
         {ok, Connection} ->
-            ?TRACE("Accepted connection from ~p", [socket:peername(Connection)]),
-            spawn(fun() -> accept(ControllingProcess, ListenSocket) end),
-            loop(ControllingProcess, Connection);
-        _Error ->
-            ?TRACE("Error accepting connection: ~p", [Error])
+            ?LOG_INFO("Accepted connection from ~p", [socket:peername(Connection)]),
+            spawn(fun() -> accept(ControllingProcess, ListenSocket, RecvLen, RecvTimeoutMs) end),
+            loop(ControllingProcess, Connection, RecvLen, RecvTimeoutMs);
+        Error ->
+            ?LOG_ERROR("Error accepting connection: ~p", [Error])
     end.
 
 
 %% @private
-loop(ControllingProcess, Connection) ->
-    case socket:recv(Connection) of
+loop(ControllingProcess, Connection, RecvLen, RecvTimeoutMs) ->
+    % erlang:display({calling_get_recv_timeout_ms, self(), on_controlling_process, ControllingProcess}),
+    % RecvTimeoutMs = get_recv_timeout_ms(ControllingProcess),
+    % erlang:display({got_reply, self(), RecvTimeoutMs}),
+    % erlang:display({recv_timeout_ms, RecvTimeoutMs, self()}),
+    case socket:recv(Connection, RecvLen, RecvTimeoutMs) of
         {ok, Data} ->
-            ?TRACE("Received data ~p on connection ~p", [Data, Connection]),
+            ?LOG_DEBUG("Received data ~p on connection ~p", [Data, Connection]),
             ControllingProcess ! {tcp, Connection, Data},
-            loop(ControllingProcess, Connection);
+            loop(ControllingProcess, Connection, RecvLen, RecvTimeoutMs);
         {error, closed} ->
-            ?TRACE("Peer closed connection ~p", [Connection]),
+            ?LOG_INFO("Peer closed connection ~p", [Connection]),
             ControllingProcess ! {tcp_closed, Connection},
             ok;
+        {error, timeout} ->
+            ?LOG_INFO("Client peer timed out on receive ~p", [Connection]),
+            try_close(Connection);
         {error, _SomethingElse} ->
-            ?TRACE("Some other error occurred ~p", [Connection]),
+            ?LOG_ERROR("Some other error occurred ~p", [Connection]),
             try_close(Connection)
     end.

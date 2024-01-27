@@ -17,15 +17,16 @@
 
 -module(httpd).
 
--export([start/2, start/3, start_link/2, start_link/3, stop/1]).
+-export([start/1, start_link/1, stop/1]).
+
+%% deprecated exports
+-export([start/2, start/3, start_link/2, start_link/3]).
 
 -behaviour(gen_tcp_server).
 -export([init/1, handle_receive/3, handle_tcp_closed/2]).
 
 -include("httpd.hrl").
-
-% -define(TRACE_ENABLED, true).
--include_lib("atomvm_lib/include/trace.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -type method() :: get | post | put | delete.
 -type content_type() :: string().
@@ -46,13 +47,37 @@
     module := module(),
     module_config := term()
 }.
--type config() :: [{path(), handler_config()}].
+-type handlers() :: [{path(), handler_config()}].
 -type octet() :: 0..255.
 -type address_v4() :: {octet(), octet(), octet(), octet()}.
 -type address() :: any | loopback | address_v4().
 -type portnum() :: 0..65536.
+-opaque httpd() :: pid().
 
--export_type([method/0, path/0, http_request/0, query_params/0]).
+-type config() :: #{
+    address => address(),
+    port => portnum(),
+    handlers => handlers(),
+    keepalive_timeout_ms => non_neg_integer(),
+    recv_buffer_size => non_neg_integer()
+}.
+
+-export_type([
+    config/0,
+    method/0,
+    path/0,
+    http_request/0,
+    query_params/0,
+    httpd/0
+]).
+
+-define(DEFAULT_CONFIG, #{
+    address => any,
+    port => 8080,
+    handlers => [],
+    keepalive_timeout_ms => 17000,
+    recv_buffer_size => 1024
+}).
 
 %%
 %% Handle an HTTP request.
@@ -63,31 +88,73 @@
     not_found | bad_request | internal_server_error |
     term().
 
--record(state, {
-    config,
-    pending_request_map = #{},
-    ws_socket_map = #{}
-}).
-
 %%
 %% API
 %%
 
--spec start(Port :: portnum(), Config :: config()) -> {ok, HTTPD :: pid()} | {error, Reason :: term()}.
-start(Port, Config) ->
-    start(any, Port, Config).
+-spec start_link(Config :: config()) -> {ok, HTTPD :: httpd()} | {error, Reason :: term()}.
+start_link(Config) ->
+    internal_start(Config, fun gen_tcp_server:start_link/1).
 
--spec start(Address :: address(), Port :: portnum(), Config :: config()) -> {ok, HTTPD :: pid()} | {error, Reason :: term()}.
-start(Address, Port, Config) ->
-    gen_tcp_server:start(#{addr => Address, port => Port}, ?MODULE, Config).
+-spec start(Config :: config()) -> {ok, HTTPD :: httpd()} | {error, Reason :: term()}.
+start(Config) ->
+    internal_start(Config, fun gen_tcp_server:start/1).
 
--spec start_link(Port :: portnum(), Config :: config()) -> {ok, HTTPD :: pid()} | {error, Reason :: term()}.
-start_link(Port, Config) ->
-    start_link(any, Port, Config).
+%% @private
+-spec internal_start(Config :: config(), StartFun :: function()) -> {ok, HTTPD :: httpd()} | {error, Reason :: term()}.
+internal_start(Config, StartFun) ->
+    EffectiveConfig = maps:merge(?DEFAULT_CONFIG, Config),
+    GenTCPServerConfig = #{
+        bind_address => #{
+            family => inet,
+            addr => maps:get(address, EffectiveConfig),
+            port => maps:get(port, EffectiveConfig)
+        },
+        handler => {
+            ?MODULE,
+            maps:get(handlers, EffectiveConfig)
+        },
+        recv_timeout_ms => maps:get(keepalive_timeout_ms, EffectiveConfig),
+        recv_len => maps:get(recv_buffer_size, EffectiveConfig)
+    },
+    ?LOG_DEBUG("Starting gen_tcp_server with config ~p~n", [GenTCPServerConfig]),
+    StartFun(GenTCPServerConfig).
 
--spec start_link(Address :: address(), Port :: portnum(), Config :: config()) -> {ok, HTTPD :: pid()} | {error, Reason :: term()}.
-start_link(Address, Port, Config) ->
-    gen_tcp_server:start_link(#{addr => Address, port => Port}, ?MODULE, Config).
+%% @deprecated
+-spec start(Port :: portnum(), Handlers :: handlers()) -> {ok, HTTPD :: pid()} | {error, Reason :: term()}.
+start(Port, Handlers) ->
+    start(any, Port, Handlers).
+
+%% @deprecated
+-spec start(Address :: address(), Port :: portnum(), Handlers :: handlers()) -> {ok, HTTPD :: pid()} | {error, Reason :: term()}.
+start(Address, Port, Handlers) ->
+    io:format("DEPRECATION WARNING: Using deprecated ~p:start/3 function.  Use start/1 instead.~n", [?MODULE]),
+    start(#{
+        address => Address,
+        port => Port,
+        handlers => Handlers
+    }).
+
+%% @deprecated
+-spec start_link(Port :: portnum(), Handlers :: handlers()) -> {ok, HTTPD :: httpd()} | {error, Reason :: term()}.
+start_link(Port, Handlers) ->
+    start_link(any, Port, Handlers).
+
+%% @deprecated
+-spec start_link(Address :: address(), Port :: portnum(), Handlers :: handlers()) -> {ok, HTTPD :: httpd()} | {error, Reason :: term()}.
+start_link(Address, Port, Handlers) ->
+    io:format("DEPRECATION WARNING: Using deprecated ~p:start_link/3 function.  Use start_link/1 instead.~n", [?MODULE]),
+    start_link(#{
+        bind_address => #{
+            family => inet,
+            addr => Address,
+            port => Port
+        },
+        handler => {
+            ?MODULE,
+            Handlers
+        }
+    }).
 
 stop(Httpd) ->
     gen_tcp_server:stop(Httpd).
@@ -96,9 +163,16 @@ stop(Httpd) ->
 %% gen_tcp_server implementation
 %%
 
+-record(state, {
+    handlers,
+    gen_tcp_server,
+    pending_request_map = #{},
+    ws_socket_map = #{}
+}).
+
 %% @hidden
-init(Config) ->
-    {ok, #state{config = Config}}.
+init(Handlers) ->
+    {ok, #state{handlers = Handlers, gen_tcp_server = self()}}.
 
 %% @hidden
 handle_receive(Socket, Packet, State) ->
@@ -116,7 +190,7 @@ handle_receive(Socket, Packet, State) ->
         end
     catch
         A:E:S ->
-            io:format("Caught error: ~p:~p:~p~n", [A, E, S]),
+            ?LOG_ERROR("Caught error: ~p:~p:~p Packet=~p State=~p~n", [A, E, S, Packet, State]),
             {close, create_error(?BAD_REQUEST, E)}
     end.
 
@@ -125,7 +199,7 @@ handle_http_request(Socket, Packet, State) ->
     case maps:get(Socket, State#state.pending_request_map, undefined) of
         undefined ->
             HttpRequest = parse_http_request(binary_to_list(Packet)),
-            % ?TRACE("HttpRequest: ~p~n", [HttpRequest]),
+            ?LOG_DEBUG("HttpRequest: ~p~n", [HttpRequest]),
             #{
                 method := Method,
                 headers := Headers
@@ -146,26 +220,26 @@ handle_http_request(Socket, Packet, State) ->
                             {close, create_error(?INTERNAL_SERVER_ERROR, Error)}
                     end;
                 ws ->
-                    ?TRACE("Protocol is ws", []),
-                    Config = State#state.config,
+                    ?LOG_INFO("Protocol is ws", []),
+                    Handlers = State#state.handlers,
                     Path = maps:get(path, HttpRequest),
-                    case get_handler(Path, Config) of
+                    case get_handler(Path, Handlers) of
                         {ok, PathSuffix, EntryConfig} ->
                             WsHandler = maps:get(handler, EntryConfig),
-                            ?TRACE("Got handler ~p", [WsHandler]),
+                            ?LOG_INFO("Got ws handler ~p", [WsHandler]),
                             HandlerConfig = maps:get(handler_config, EntryConfig, #{}),
                             case WsHandler:start(Socket, PathSuffix, HandlerConfig) of
                                 {ok, WebSocket} ->
-                                    ?TRACE("Started web socket handler: ~p", [WebSocket]),
+                                    ?LOG_INFO("Started web socket handler: ~p", [WebSocket]),
                                     NewWebSocketMap = maps:put(Socket, WebSocket, State#state.ws_socket_map),
                                     NewState = State#state{ws_socket_map = NewWebSocketMap},
                                     ReplyToken = get_reply_token(maps:get(headers, HttpRequest)),
                                     ReplyHeaders = #{"Upgrade" => "websocket", "Connection" => "Upgrade", "Sec-WebSocket-Accept" => ReplyToken},
                                     Reply = create_reply(?SWITCHING_PROTOCOLS, ReplyHeaders, <<"">>),
-                                    ?TRACE("Sending web socket upgrade reply: ~p", [Reply]),
+                                    ?LOG_INFO("Sending web socket upgrade reply: ~p", [Reply]),
                                     {reply, Reply, NewState};
                                 Error ->
-                                    ?TRACE("Web socket error: ~p", [Error]),
+                                    ?LOG_ERROR("Web socket error: ~p", [Error]),
                                     {close, create_error(?INTERNAL_SERVER_ERROR, {web_socket_error, Error})}
                             end;
                         Error ->
@@ -173,19 +247,19 @@ handle_http_request(Socket, Packet, State) ->
                     end
             end;
         PendingHttpRequest ->
-            ?TRACE("Packetlen: ~p", [erlang:byte_size(Packet)]),
+            ?LOG_DEBUG("Packetlen: ~p", [erlang:byte_size(Packet)]),
             handle_request_state(Socket, PendingHttpRequest#{body := Packet}, State)
     end.
 
 %% @private
 init_handler(HttpRequest, State) ->
-    Config = State#state.config,
+    Handlers = State#state.handlers,
     Path = maps:get(path, HttpRequest),
-    case get_handler(Path, Config) of
+    case get_handler(Path, Handlers) of
         {ok, PathSuffix, EntryConfig} ->
             Handler = maps:get(handler, EntryConfig),
             HandlerConfig = maps:get(handler_config, EntryConfig, #{}),
-
+            ?LOG_INFO("Initializing handler ~p with config ~p", [Handler, HandlerConfig]),
             case Handler:init_handler(PathSuffix, HandlerConfig) of
                 {ok, HandlerState} ->
                     {ok, {Handler, HandlerState, PathSuffix, HandlerConfig}};
@@ -201,7 +275,7 @@ handle_request_state(Socket, HttpRequest, State) ->
     PendingRequestMap = State#state.pending_request_map,
     case get_request_state(HttpRequest) of
         complete ->
-            ?TRACE("Request complete.  Handling...", []),
+            ?LOG_DEBUG("Request complete.  Handling...", []),
             NewPendingRequestMap = maps:remove(Socket, PendingRequestMap),
             call_http_req_handler(Socket, HttpRequest, State#state{pending_request_map = NewPendingRequestMap});
         expect_continue ->
@@ -221,24 +295,24 @@ get_request_state(HttpRequest) ->
     Headers = maps:get(headers, HttpRequest),
     case maps:get(<<"Expect">>, Headers, undefined) of
         <<"100-continue">> ->
-            ?TRACE("Expect: 100-continue", []),
+            ?LOG_DEBUG("Expect: 100-continue", []),
             expect_continue;
         undefined ->
             case maps:get(<<"Content-Length">>, Headers, undefined) of
                 undefined ->
-                    ?TRACE("No content length; request complete", []),
+                    ?LOG_DEBUG("No content length; request complete", []),
                     complete;
                 ContentLenBin when is_binary(ContentLenBin) ->
                     ContentLen = binary_to_integer(ContentLenBin),
-                    ?TRACE("ContentLen: ~p", [ContentLen]),
+                    ?LOG_DEBUG("ContentLen: ~p", [ContentLen]),
                     Body = maps:get(body, HttpRequest, <<"">>),
                     BodyLen = erlang:byte_size(Body),
-                    ?TRACE("BodyLen: ~p", [BodyLen]),
+                    ?LOG_DEBUG("BodyLen: ~p", [BodyLen]),
                     case BodyLen < ContentLen of
                         true ->
                             wait_for_body;
                         false ->
-                            ?TRACE("Complete! BodyLen: ~p ContentLen: ~p", [BodyLen, ContentLen]),
+                            ?LOG_INFO("Complete! BodyLen: ~p ContentLen: ~p", [BodyLen, ContentLen]),
                             complete
                     end
             end
@@ -277,6 +351,7 @@ call_http_req_handler(Socket, HttpRequest, State) ->
         {error, internal_server_error} ->
             {close, create_error(?INTERNAL_SERVER_ERROR, internal_server_error)};
         HandlerError ->
+            ?LOG_ERROR("Unexpected handler response ~p from handler ~p", [HandlerError, Handler]),
             {close, create_error(?INTERNAL_SERVER_ERROR, HandlerError)}
     end.
 
@@ -309,11 +384,12 @@ get_reply_token(Headers) ->
     MagicKey = <<"258EAFA5-E914-47DA-95CA-C5AB0DC85B11">>,
     PreImage = <<WebSocketKey/binary, MagicKey/binary>>,
     ReplyToken = base64:encode(crypto:hash(sha, PreImage)),
-    ?TRACE("ReplyToken: ~p", [ReplyToken]),
+    ?LOG_DEBUG("ReplyToken: ~p", [ReplyToken]),
     ReplyToken.
 
 %% @private
 parse_http_request(Packet) ->
+    ?LOG_DEBUG("parse_http_request.  Packet=~p", [Packet]),
     {Heading, HeadingRest} = parse_heading(Packet, start, [], #{}),
     {Headers, Body} = parse_header(HeadingRest, #{}),
     maps:merge(
@@ -357,7 +433,8 @@ parse_heading([$\n|Rest], in_version, _Tmp, Accum) ->
 parse_heading([C|Rest], in_version, Tmp, Accum) ->
     parse_heading(Rest, in_version, [C|Tmp], Accum);
 %% error state
-parse_heading(_Packet, _State, _Tmp, _Accum) ->
+parse_heading(Packet, State, Tmp, Accum) ->
+    ?LOG_ERROR("bad_heading.  Packet=~p State=~p Tmp=~p Accum=~p", [Packet, State, Tmp, Accum]),
     throw(bad_heading).
 
 %% @private
@@ -365,6 +442,8 @@ parse_header([$\r, $\n | Rest], Accum) ->
     {Accum, Rest};
 parse_header([$\n | Rest], Accum) ->
     {Accum, Rest};
+parse_header([], Accum) ->
+    {Accum, []};
 parse_header(Packet, Accum) ->
     {Line, Rest} = parse_line(Packet, []),
     {Key, Value} = split_header(Line),
@@ -374,9 +453,12 @@ parse_line([$\r, $\n | Rest], Accum) ->
     {lists:reverse(Accum), Rest};
 parse_line([$\n | Rest], Accum) ->
     {lists:reverse(Accum), Rest};
+parse_line([], Accum) ->
+    {lists:reverse(Accum), []};
 parse_line([C | Rest], Accum) ->
     parse_line(Rest, [C | Accum]);
-parse_line(_Packet, _Accum) ->
+parse_line(Packet, _Accum) ->
+    ?LOG_ERROR("bad line: ->~s<-~n", [Packet]),
     throw(bad_line).
 
 %% @private
@@ -514,7 +596,7 @@ get_protocol(_, _) ->
 %% @private
 create_error(StatusCode, Error) ->
     ErrorString = io_lib:format("Error: ~p", [Error]),
-    io:format("error in httpd. StatusCode=~p  Error=~p~n", [StatusCode, Error]),
+    ?LOG_INFO("Error in httpd. StatusCode=~p  Error=~p~n", [StatusCode, Error]),
     create_reply(StatusCode, "text/html", ErrorString).
 
 %% @private

@@ -118,3 +118,10 @@ var create_websocket = function() {
 }
 
 var webSocket = create_websocket();
+
+// for now this is a bit of a hack to keep the web socket connection alive
+var hearbeatFun = function() {
+	webSocket.send("hb");
+}
+
+setInterval(hearbeatFun, 5000);

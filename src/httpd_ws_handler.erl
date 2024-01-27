@@ -160,9 +160,9 @@ parse_frame(Packet) ->
         % Opcode = FinOpcode band 16#0F,
         Mask = (MaskLen band 16#80) bsr 7,
         PayloadLen = MaskLen band 16#7F,
+        %% TODO handle opcodes
         % <<Fin:1, _Reserved:3, Opcode:4, Mask:1, PayloadLen:7, Rest/binary>> = Packet,
         % ?TRACE("FinOpcode: ~p, Fin: ~p, Opcode: ~p, MaskLen: ~p, Mask: ~p, PayloadLen: ~p, Rest: ~p", [FinOpcode, Fin, Opcode, MaskLen, Mask, PayloadLen, Rest]),
-        ?TRACE("Fin: ~p, Opcode: ~p, Mask: ~p, PayloadLen: ~p, Rest: ~p", [Fin, Opcode, Mask, PayloadLen, Rest]),
         case PayloadLen of
             0 ->
                 {ok, <<"">>};

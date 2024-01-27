@@ -24,9 +24,14 @@
 -export([init_handler/2, handle_http_req/2]).
 
 start() ->
+
+    % {ok, _} = logger_manager:start_link(#{
+    %     log_level => info
+    % }),
+
     ok = maybe_start_network(atomvm:platform()),
 
-    Config = [
+    Handlers = [
         {[<<"api">>], #{
             handler => httpd_api_handler,
             handler_config => #{
@@ -51,7 +56,7 @@ start() ->
     ],
 
     io:format("Starting httpd on port 8080 ...~n", []),
-    case httpd:start(8080, Config) of
+    case httpd:start(#{port => 8080, handlers => Handlers}) of
         {ok, _Pid} ->
             io:format("httpd started.~n", []),
             timer:sleep(infinity);
@@ -179,10 +184,15 @@ update_loop(WebSocket, LastMemoryData) ->
         _ ->
             Binary = iolist_to_binary(json_encoder:encode(NewMemoryData)),
             io:format("Sending websocket message to client ~p ... ", [Binary]),
+        try
             httpd_ws_handler:send(WebSocket, Binary),
-            io:format("sent.~n")
-    end,
-    update_loop(WebSocket, LatestMemoryData).
+            io:format("sent.~n"),
+            update_loop(WebSocket, LatestMemoryData)
+        catch
+            C:E ->
+                io:format("An error occurred sending a status update message: ~p~n", [{C, E}])
+        end
+end.
 
 %%
 %% Internal functions
