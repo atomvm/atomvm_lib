@@ -104,7 +104,11 @@ static term nif_sha1(Context *ctx, int argc, term argv[])
     term ret = term_create_uninitialized_binary(SHA1_LEN, &ctx->heap, ctx->global);
     binary = argv[0];
 
+    #if ESP_IDF_VERSION_MAJOR >= 5
+    int res = mbedtls_sha1((const unsigned char *) term_binary_data(binary), term_binary_size(binary), (unsigned char *) term_binary_data(ret));
+    #else
     int res = mbedtls_sha1_ret((const unsigned char *) term_binary_data(binary), term_binary_size(binary), (unsigned char *) term_binary_data(ret));
+    #endif
     if (res != 0) {
         RAISE_ERROR(BADARG_ATOM);
     }

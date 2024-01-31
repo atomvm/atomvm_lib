@@ -28,7 +28,17 @@ idf_component_register(
     PRIV_REQUIRES "libatomvm" "avm_sys" "mbedtls"
 )
 
-idf_build_set_property(
-    LINK_OPTIONS "-Wl,--whole-archive ${CMAKE_CURRENT_BINARY_DIR}/lib${COMPONENT_NAME}.a -Wl,--no-whole-archive"
-    APPEND
-)
+# WHOLE_ARCHIVE option is supported only with esp-idf 5.x
+if (IDF_VERSION_MAJOR EQUAL 5)
+    set(OPTIONAL_WHOLE_ARCHIVE WHOLE_ARCHIVE)
+else()
+    set(OPTIONAL_WHOLE_ARCHIVE "")
+endif()
+
+# A link option is required with esp-idf 4.x
+if (IDF_VERSION_MAJOR EQUAL 4)
+    idf_build_set_property(
+        LINK_OPTIONS "-Wl,--whole-archive ${CMAKE_CURRENT_BINARY_DIR}/lib${COMPONENT_NAME}.a -Wl,--no-whole-archive"
+        APPEND
+    )
+endif()
