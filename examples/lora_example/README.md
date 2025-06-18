@@ -15,7 +15,7 @@ For this application, you will need:
 
 While the [IDF SDK](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/) and required tool-chains are not required, they may make life a little easier.
 
-> Note.  These instructions assume you have flashed the AtomVM virtual machine and Erlang libraries to your ESP32 device.  For information about flashing ESP32 devices with the AtomVM virtual machine and libraries, consult the [AtomVM documentation](https://doc.atomvm.net).
+> Note.  These instructions assume you have flashed the AtomVM virtual machine and Erlang libraries to your ESP32 device.  For information about flashing ESP32 devices with the AtomVM virtual machine and libraries, consult the [AtomVM documentation](https://doc.atomvm.org/latest) [Getting Started on the ESP32 platform](https://doc.atomvm.org/latest/getting-started-guide.html#getting-started-on-the-esp32-platform) section.
 
 ## Getting Started
 
