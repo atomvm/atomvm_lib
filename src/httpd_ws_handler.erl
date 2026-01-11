@@ -80,7 +80,8 @@ send(WebSocket, Packet) ->
 -record(state, {
     socket,
     handler_module,
-    handler_state
+    handler_state,
+    frame_buffer = <<>>  %% Buffer for incomplete WebSocket frames
 }).
 
 %% @hidden
@@ -103,28 +104,36 @@ handle_cast({message, Packet}, State) ->
     #state{
         socket = Socket,
         handler_module = HandlerModule,
-        handler_state = HandlerState
+        handler_state = HandlerState,
+        frame_buffer = Buffer
     } = State,
     ?TRACE("WebSocket received packet ~p", [Packet]),
-    case parse_frame(Packet) of
-        {ok, PayloadData} ->
-            ?TRACE("HandlerModule ~p; PayloadData ~p", [HandlerModule, PayloadData]),
+    
+    %% Accumulate packet data into buffer
+    NewBuffer = <<Buffer/binary, Packet/binary>>,
+    
+    case parse_frame(NewBuffer) of
+        {ok, PayloadData, Remaining} ->
+            ?TRACE("HandlerModule ~p; PayloadData ~p; Remaining ~p bytes", [HandlerModule, PayloadData, byte_size(Remaining)]),
             case HandlerModule:handle_ws_message(PayloadData, HandlerState) of
                 {reply, Reply, NewHandlerState} ->
                     ?TRACE("Handled WS payload.  NewHandlerState: ~p", [NewHandlerState]),
                     do_send(Socket, Reply, text),
-                    {noreply, State#state{handler_state = NewHandlerState}};
+                    {noreply, State#state{handler_state = NewHandlerState, frame_buffer = Remaining}};
                 {noreply, NewHandlerState} ->
                     ?TRACE("Handled WS payload.  NewHandlerState: ~p", [NewHandlerState]),
-                    {noreply, State#state{handler_state = NewHandlerState}};
+                    {noreply, State#state{handler_state = NewHandlerState, frame_buffer = Remaining}};
                 HandleModleError ->
                     ?TRACE("HandleModleError: ~p", [HandleModleError]),
                     socket:close(Socket),
                     {stop, HandleModleError, State}
             end;
+        incomplete ->
+            ?TRACE("Incomplete frame, buffering ~p bytes", [byte_size(NewBuffer)]),
+            {noreply, State#state{frame_buffer = NewBuffer}};
         empty_payload ->
             ?TRACE("Empty payload.", []),
-            {noreply, State};
+            {noreply, State#state{frame_buffer = <<>>}};
         ParseFrameError ->
             ?TRACE("ParseFrameError: ~p", [ParseFrameError]),
             socket:close(Socket),
@@ -153,55 +162,83 @@ terminate(_Reason, _State) ->
 %% @private
 parse_frame(<<0,0,0,0,0,0,0,0,0,0>>) ->
     empty_payload;
+parse_frame(Packet) when byte_size(Packet) < 2 ->
+    incomplete;
 parse_frame(Packet) ->
     try
         <<_FinOpcode:8, MaskLen:8, Rest/binary>> = Packet,
-        % Fin = (FinOpcode band 16#80) bsr 7,
-        % Opcode = FinOpcode band 16#0F,
         Mask = (MaskLen band 16#80) bsr 7,
         PayloadLen = MaskLen band 16#7F,
-        % <<Fin:1, _Reserved:3, Opcode:4, Mask:1, PayloadLen:7, Rest/binary>> = Packet,
-        % ?TRACE("FinOpcode: ~p, Fin: ~p, Opcode: ~p, MaskLen: ~p, Mask: ~p, PayloadLen: ~p, Rest: ~p", [FinOpcode, Fin, Opcode, MaskLen, Mask, PayloadLen, Rest]),
-        ?TRACE("Fin: ~p, Opcode: ~p, Mask: ~p, PayloadLen: ~p, Rest: ~p", [Fin, Opcode, Mask, PayloadLen, Rest]),
-        case PayloadLen of
-            0 ->
-                {ok, <<"">>};
+        
+        %% Calculate how many bytes we need for the complete frame
+        {ActualPayloadLen, HeaderSize} = case PayloadLen of
             126 ->
-                case Mask of
-                    1 ->
-                        <<MediumPayloadLen:16, Rest2/binary>> = Rest,
-                        <<MaskingKey:4/binary, MaskedPayload:MediumPayloadLen/binary>> = Rest2,
-                        ?TRACE("MaskingKey: ~p, MaskedPayload: ~p", [MaskingKey, MaskedPayload]),
-                        {ok, unmask(MaskingKey, MaskedPayload)};
-                    _ ->
-                        <<MediumPayloadLen:16, Rest2/binary>> = Rest,
-                        {ok, <<Rest2:MediumPayloadLen/binary>>}
+                case byte_size(Rest) >= 2 of
+                    true ->
+                        <<Len:16, _/binary>> = Rest,
+                        {Len, 2};
+                    false ->
+                        {need_more, 2}
                 end;
             127 ->
-                case Mask of
-                    1 ->
-                        <<LargePayloadLen:64, Rest2/binary>> = Rest,
-                        <<MaskingKey:4/binary, MaskedPayload:LargePayloadLen/binary>> = Rest2,
-                        ?TRACE("MaskingKey: ~p, MaskedPayload: ~p", [MaskingKey, MaskedPayload]),
-                        {ok, unmask(MaskingKey, MaskedPayload)};
-                    _ ->
-                        <<MediumPayloadLen:16, Rest2/binary>> = Rest,
-                        {ok, <<Rest2:MediumPayloadLen/binary>>}
+                case byte_size(Rest) >= 8 of
+                    true ->
+                        <<Len:64, _/binary>> = Rest,
+                        {Len, 8};
+                    false ->
+                        {need_more, 8}
                 end;
+            Len ->
+                {Len, 0}
+        end,
+        
+        case ActualPayloadLen of
+            need_more ->
+                incomplete;
             _ ->
-                case Mask of
-                    1 ->
-                        <<MaskingKey:4/binary, MaskedPayload:PayloadLen/binary>> = Rest,
-                        ?TRACE("MaskingKey: ~p, MaskedPayload: ~p", [MaskingKey, MaskedPayload]),
-                        {ok, unmask(MaskingKey, MaskedPayload)};
-                    _ ->
-                        {ok, Rest}
+                MaskSize = case Mask of 1 -> 4; _ -> 0 end,
+                RequiredBytes = HeaderSize + MaskSize + ActualPayloadLen,
+                
+                case byte_size(Rest) >= RequiredBytes of
+                    true ->
+                        %% We have enough data to parse the complete frame
+                        parse_complete_frame(PayloadLen, Mask, Rest);
+                    false ->
+                        ?TRACE("Incomplete frame: have ~p bytes, need ~p", [byte_size(Packet), 2 + RequiredBytes]),
+                        incomplete
                 end
         end
     catch
         _:Error ->
             ?TRACE("Error in parse_frame: ~p", [Error]),
             {error, Error}
+    end.
+
+%% @private
+parse_complete_frame(PayloadLen, Mask, Rest) ->
+    case PayloadLen of
+        0 ->
+            {ok, <<"">>, Rest};
+        126 ->
+            <<MediumPayloadLen:16, Rest2/binary>> = Rest,
+            extract_payload(Mask, MediumPayloadLen, Rest2);
+        127 ->
+            <<LargePayloadLen:64, Rest2/binary>> = Rest,
+            extract_payload(Mask, LargePayloadLen, Rest2);
+        _ ->
+            extract_payload(Mask, PayloadLen, Rest)
+    end.
+
+%% @private
+extract_payload(Mask, PayloadLen, Data) ->
+    case Mask of
+        1 ->
+            <<MaskingKey:4/binary, MaskedPayload:PayloadLen/binary, Remaining/binary>> = Data,
+            ?TRACE("MaskingKey: ~p, MaskedPayload length: ~p", [MaskingKey, byte_size(MaskedPayload)]),
+            {ok, unmask(MaskingKey, MaskedPayload), Remaining};
+        _ ->
+            <<Payload:PayloadLen/binary, Remaining/binary>> = Data,
+            {ok, Payload, Remaining}
     end.
 
 %% @private
